@@ -1,0 +1,37 @@
+{
+    "Map/SizeTest": {
+        "height": 4300,
+        "width": 2
+    },
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "": {
+            "scaleInDock": 1
+        },
+        ":/automap-tiles.tsx": {
+            "scaleInDock": 1
+        }
+    },
+    "last.exportedFilePath": "/Users/meredithclopper/Documents/School/CS 2261/FinalProject/RedDamsel",
+    "last.externalTilesetPath": "/Users/meredithclopper/Documents/School/CS 2261/FinalProject/RedDamsel/Assets",
+    "last.imagePath": "/Users/meredithclopper/Documents/School/CS 2261/FinalProject/RedDamsel/Assets",
+    "map.height": 32,
+    "map.lastUsedExportFilter": "GBA source files - regular (*.c)",
+    "map.tileHeight": 8,
+    "map.tileWidth": 8,
+    "map.width": 32,
+    "openFiles": [
+    ],
+    "project": "Red Damsel.tiled-project",
+    "recentFiles": [
+    ],
+    "tileset.lastUsedFilter": "Tiled tileset files (*.tsx *.xml)",
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.tileSize": {
+        "height": 8,
+        "width": 8
+    }
+}
