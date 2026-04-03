@@ -956,22 +956,6 @@ typedef struct {
 } SPRITE;
 # 4 "game.h" 2
 
-u8 colorAt(int x, int y);
-u8 mapCollide(int x, int y);
-
-void initGame();
-void initPlayer();
-void initEnemies();
-
-void updateGame();
-void updateCamera();
-void updatePlayer();
-void updateEnemies();
-
-void drawGame();
-void drawPlayer();
-void drawEnemies();
-
 
 
 
@@ -979,11 +963,16 @@ void drawEnemies();
 
 
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
-typedef enum {IDLE, WALK, DODGE, HIT} ANIMATION_STATE;
+typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 
 static int idleFrames[] = {0};
 static int walkFrames[] = {1, 2, 3, 4, 5, 6};
 static int dodgeFrames[] = {7, 8, 9, 10, 11, 12};
+static int attackFrames[] = {32, 33, 34, 35, 36};
+static int swordFrames[] = {37, 38, 39, 40, 41};
+static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
+static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
+static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
 
 typedef struct {
     int x;
@@ -1004,6 +993,24 @@ typedef struct {
 } Player;
 
 typedef struct {
+    int active;
+    int offX;
+    int offY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    int timeUntilNextFrame;
+    int* frames;
+    int numFrames;
+    u8 oamIndex;
+} Sword;
+
+
+
+
+typedef struct {
+    int active;
     int x;
     int y;
     int vX;
@@ -1020,6 +1027,31 @@ typedef struct {
     ANIMATION_STATE state;
     u8 oamIndex;
 } Enemy;
+
+u8 colorAt(int x, int y);
+u8 mapCollide(int x, int y);
+
+void initGame();
+void initPlayer();
+void initSword();
+void initEnemies();
+
+void updateGame();
+void updateCamera();
+void updatePlayer();
+void attack();
+void updateEnemies();
+void updateEnemy(Enemy* enemy);
+void checkEntityCollisions();
+
+void drawGame();
+void drawPlayer();
+void drawEnemies();
+
+extern Player player;
+extern Sword sword;
+extern Enemy enemies[1];
+extern int lives;
 # 4 "game.c" 2
 # 1 "print.h" 1
 # 35 "print.h"
@@ -1065,12 +1097,15 @@ u8 mapCollide(int x, int y) {
 }
 
 Player player;
-Enemy enemies[3];
+Sword sword;
+Enemy enemies[1];
+int lives = 1;
 
 int hOff, vOff;
 
 void initGame() {
     initPlayer();
+    initSword();
     initEnemies();
 }
 
@@ -1083,17 +1118,31 @@ void initPlayer() {
     player.hitboxOffY = 7;
     player.hitboxW = 8;
     player.hitboxH = 8;
-    player.timeUntilNextFrame = 10;
+    player.timeUntilNextFrame = 5;
     player.direction = LEFT;
     player.currentFrame = 0;
     player.frames = idleFrames;
     player.numFrames = 1;
     player.state = IDLE;
-    player.oamIndex = 0;
+    player.oamIndex = 1;
+}
+
+void initSword() {
+    sword.active = 0;
+    sword.offX = 0;
+    sword.offY = 0;
+    sword.hitboxOffX = 0;
+    sword.hitboxOffY = 0;
+    sword.hitboxW = 0;
+    sword.hitboxH = 0;
+    sword.timeUntilNextFrame = 5;
+    sword.frames = swordFrames;
+    sword.numFrames = 5;
+    sword.oamIndex = 0;
 }
 
 void initEnemies() {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 1; i++) {
         enemies[i].x = ((80 + i * 40) << 4);
         enemies[i].y = ((60) << 4);
         enemies[i].vX = 0;
@@ -1108,14 +1157,16 @@ void initEnemies() {
         enemies[i].frames = idleFrames;
         enemies[i].numFrames = 1;
         enemies[i].state = IDLE;
-        enemies[i].oamIndex = i + 1;
+        enemies[i].oamIndex = i + 2;
+        enemies[i].active = 1;
     }
 }
 
 void updateGame() {
     updatePlayer();
-
+    updateEnemies();
     updateCamera();
+    checkEntityCollisions();
 }
 
 void updateCamera() {
@@ -1155,27 +1206,33 @@ void updateCamera() {
 }
 
 void updatePlayer() {
-    player.vX = 0;
-    player.vY = 0;
-    if ((~(buttons) & ((1<<6)))) {
-        player.vY -= 12;
-        player.direction = UP;
-    }
-    if ((~(buttons) & ((1<<7)))) {
-        player.vY += 12;
-        player.direction = DOWN;
-    }
-    if ((~(buttons) & ((1<<5)))) {
-        player.vX -= 12;
-        player.direction = LEFT;
-    }
-    if ((~(buttons) & ((1<<4)))) {
-        player.vX += 12;
-        player.direction = RIGHT;
+    player.timeUntilNextFrame--;
+    if (player.timeUntilNextFrame <= 0) {
+        player.timeUntilNextFrame = (player.state == ATTACK) ? 5 : 6;
+        player.currentFrame++;
+
+        if (player.currentFrame >= player.numFrames) {
+            if (player.state == ATTACK || player.state == DODGE) {
+                player.state = IDLE;
+                player.frames = idleFrames;
+                player.numFrames = 1;
+                sword.active = 0;
+            }
+            player.currentFrame = 0;
+        }
     }
 
-    if ((!(~(oldButtons) & ((1<<9))) && (~(buttons) & ((1<<9))))) {
-        if (player.state == DODGE) return;
+    if (player.state == ATTACK) return;
+
+    player.vX = 0;
+    player.vY = 0;
+
+    if ((~(buttons) & ((1<<6)))) { player.vY -= 12; player.direction = UP; }
+    if ((~(buttons) & ((1<<7)))) { player.vY += 12; player.direction = DOWN; }
+    if ((~(buttons) & ((1<<5)))) { player.vX -= 12; player.direction = LEFT; }
+    if ((~(buttons) & ((1<<4)))) { player.vX += 12; player.direction = RIGHT; }
+
+    if ((!(~(oldButtons) & ((1<<9))) && (~(buttons) & ((1<<9)))) && player.state != DODGE) {
         player.state = DODGE;
         player.frames = dodgeFrames;
         player.numFrames = 6;
@@ -1183,21 +1240,16 @@ void updatePlayer() {
         player.timeUntilNextFrame = 6;
     }
 
-    if (player.state == DODGE) {
-        player.timeUntilNextFrame--;
-        if (player.timeUntilNextFrame <= 0) {
-            player.timeUntilNextFrame = 6;
-            player.currentFrame++;
-        }
-        if (player.currentFrame >= player.numFrames) {
-            player.state = IDLE;
-            player.frames = idleFrames;
-            player.numFrames = 1;
-            player.currentFrame = 0;
-        }
-        player.vX *= 1.5;
-        player.vY *= 1.5;
+    if ((!(~(oldButtons) & ((1<<0))) && (~(buttons) & ((1<<0)))) && player.state != DODGE) {
+        attack();
+        return;
     }
+
+    if (player.state == DODGE) {
+        player.vX = (player.vX * 3) / 2;
+        player.vY = (player.vY * 3) / 2;
+    }
+
 
     if (mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX, ((player.y) >> 4) + player.hitboxOffY) ||
         mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y) >> 4) + player.hitboxOffY) ||
@@ -1211,8 +1263,6 @@ void updatePlayer() {
         mapCollide(((player.x) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y + player.vY) >> 4) + player.hitboxOffY + player.hitboxH - 1)) {
         player.vY = 0;
     }
-
-    mgba_printf("Player position: (%d, %d), velocity: (%d, %d), state: %d, frame: %d\n", ((player.x) >> 4), ((player.y) >> 4), player.vX, player.vY, player.state, player.currentFrame);
 
 
     if (player.vX != 0 && player.vY != 0) {
@@ -1233,18 +1283,140 @@ void updatePlayer() {
     } else {
         player.state = WALK;
         player.frames = walkFrames;
-        player.numFrames = 6;
+        player.numFrames = 5;
+    }
+}
+
+void attack() {
+    if (player.state == ATTACK || player.state == DODGE) return;
+    player.state = ATTACK;
+    player.frames = attackFrames;
+    player.numFrames = 5;
+    player.currentFrame = 0;
+    player.timeUntilNextFrame = 5;
+
+    sword.active = 1;
+    player.direction = player.direction;
+    sword.frames = swordFrames;
+    sword.numFrames = 5;
+    sword.timeUntilNextFrame = 5;
+}
+
+void updateEnemies() {
+    for (int i = 0; i < 1; i++) {
+        if (!enemies[i].active) continue;
+        updateEnemy(&enemies[i]);
+    }
+}
+
+void updateEnemy(Enemy* enemy) {
+    enemy->timeUntilNextFrame--;
+    if (enemy->timeUntilNextFrame <= 0) {
+        enemy->timeUntilNextFrame = 5;
+        enemy->currentFrame++;
+
+        if (enemy->currentFrame >= enemy->numFrames) {
+            enemy->currentFrame = 0;
+        }
     }
 
-    player.timeUntilNextFrame--;
-    if (player.timeUntilNextFrame <= 0) {
-        player.timeUntilNextFrame = 6;
-        player.currentFrame = (player.currentFrame + 1) % player.numFrames;
+    enemy->vX = 0;
+    enemy->vY = 0;
+
+    int playerX = ((player.x) >> 4);
+    int playerY = ((player.y) >> 4);
+    int enemyX = ((enemy->x) >> 4);
+    int enemyY = ((enemy->y) >> 4);
+    if (playerX < enemyX - 4) {
+        enemy->vX = -4;
+        enemy->direction = LEFT;
+    } else if (playerX > enemyX + 4) {
+        enemy->vX = 4;
+        enemy->direction = RIGHT;
+    }
+    if (playerY < enemyY - 4) {
+        enemy->vY = -4;
+        enemy->direction = UP;
+    } else if (playerY > enemyY + 4) {
+        enemy->vY = 4;
+        enemy->direction = DOWN;
+    }
+
+
+    if (enemy->vX != 0 && enemy->vY != 0) {
+        enemy->x += enemy->vX / 1.4;
+        enemy->y += enemy->vY / 1.4;
+    } else {
+        enemy->x += enemy->vX;
+        enemy->y += enemy->vY;
+    }
+}
+
+void checkEntityCollisions() {
+    int playerX = ((player.x) >> 4);
+    int playerY = ((player.y) >> 4);
+
+    int swordHitboxX, swordHitboxY, swordHitboxW, swordHitboxH;
+    switch (player.direction) {
+        case LEFT:
+            swordHitboxX = playerX - 4;
+            swordHitboxY = playerY;
+            swordHitboxW = 8;
+            swordHitboxH = 16;
+            break;
+        case RIGHT:
+            swordHitboxX = playerX + 12;
+            swordHitboxY = playerY;
+            swordHitboxW = 8;
+            swordHitboxH = 16;
+            break;
+        case DOWN:
+            swordHitboxX = playerX;
+            swordHitboxY = playerY + 12;
+            swordHitboxW = 16;
+            swordHitboxH = 8;
+            break;
+        case UP:
+            swordHitboxX = playerX;
+            swordHitboxY = playerY - 4;
+            swordHitboxW = 16;
+            swordHitboxH = 8;
+            break;
+    }
+
+    int pLeft = playerX + player.hitboxOffX;
+    int pTop = playerY + player.hitboxOffY;
+    int pRight = pLeft + player.hitboxW;
+    int pBottom = pTop + player.hitboxH;
+
+    for (int i = 0; i < 1; i++) {
+        if (!enemies[i].active) continue;
+        int enemyX = ((enemies[i].x) >> 4);
+        int enemyY = ((enemies[i].y) >> 4);
+
+        if (swordHitboxX < enemyX + enemies[i].hitboxOffX + enemies[i].hitboxW &&
+            swordHitboxX + swordHitboxW > enemyX + enemies[i].hitboxOffX &&
+            swordHitboxY < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
+            swordHitboxY + swordHitboxH > enemyY + enemies[i].hitboxOffY && sword.active) {
+            mgba_printf("Enemy hit!");
+            enemies[i].active = 0;
+            return;
+        }
+
+
+        if (pLeft < enemyX + enemies[i].hitboxOffX + enemies[i].hitboxW &&
+            pRight > enemyX + enemies[i].hitboxOffX &&
+            pTop < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
+            pBottom > enemyY + enemies[i].hitboxOffY) {
+            mgba_printf("Player hit!");
+            lives--;
+        }
     }
 }
 
 void drawGame() {
     drawPlayer();
+    drawEnemies();
 
     waitForVBlank();
     DMANow(3, shadowOAM, ((OBJ_ATTR*)(0x7000000)), 128*4);
@@ -1254,8 +1426,57 @@ void drawPlayer() {
     shadowOAM[player.oamIndex].attr0 = ((player.y) >> 4) - vOff | (0<<13) | (0<<14);
     shadowOAM[player.oamIndex].attr1 = ((player.x) >> 4) - hOff | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
     if (player.direction == LEFT) {
-        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | ((((player.direction * 2) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
+        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | ((((player.direction * 4) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
     } else {
-        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | (((((player.direction - 1) * 2) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
+        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | (((((player.direction - 1) * 4) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
+    }
+
+    if (!sword.active) {
+        shadowOAM[sword.oamIndex].attr0 = (2<<8);
+        return;
+    }
+
+    int swordX, swordY, frameTile;
+    switch (player.direction) {
+        case LEFT:
+            swordX = ((player.x) >> 4) + swordOffsetSide[player.currentFrame][0];
+            swordY = ((player.y) >> 4) + swordOffsetSide[player.currentFrame][1];
+            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            break;
+        case RIGHT:
+            swordX = ((player.x) >> 4) - swordOffsetSide[player.currentFrame][0];
+            swordY = ((player.y) >> 4) + swordOffsetSide[player.currentFrame][1];
+            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            break;
+        case DOWN:
+            swordX = ((player.x) >> 4) + swordOffsetDown[player.currentFrame][0];
+            swordY = ((player.y) >> 4) + swordOffsetDown[player.currentFrame][1];
+            frameTile = ((((DOWN * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            break;
+        case UP:
+            swordX = ((player.x) >> 4) + swordOffsetUp[player.currentFrame][0];
+            swordY = ((player.y) >> 4) + swordOffsetUp[player.currentFrame][1];
+            frameTile = ((((UP * 2 + 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            break;
+    }
+
+    shadowOAM[sword.oamIndex].attr0 = swordY - vOff | (0<<13) | (0<<14);
+    shadowOAM[sword.oamIndex].attr1 = swordX - hOff | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
+    shadowOAM[sword.oamIndex].attr2 = (((0) & 0xF) <<12) | frameTile;
+}
+
+void drawEnemies() {
+    for (int i = 0; i < 1; i++) {
+        if (!enemies[i].active) {
+            shadowOAM[enemies[i].oamIndex].attr0 = (2<<8);
+            continue;
+        }
+        shadowOAM[enemies[i].oamIndex].attr0 = ((enemies[i].y) >> 4) - vOff | (0<<13) | (0<<14);
+        shadowOAM[enemies[i].oamIndex].attr1 = ((enemies[i].x) >> 4) - hOff | (1<<14) | (enemies[i].direction == RIGHT ? (1<<12) : 0);
+        if (enemies[i].direction == LEFT) {
+            shadowOAM[enemies[i].oamIndex].attr2 = (((0) & 0xF) <<12) | ((((LEFT * 4) * (32) + (enemies[i].frames[enemies[i].currentFrame] * 2))) & 0x3FF);
+        } else {
+            shadowOAM[enemies[i].oamIndex].attr2 = (((0) & 0xF) <<12) | (((((enemies[i].direction - 1) * 4) * (32) + (enemies[i].frames[enemies[i].currentFrame] * 2))) & 0x3FF);
+        }
     }
 }

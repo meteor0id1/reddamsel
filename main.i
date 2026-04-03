@@ -304,38 +304,18 @@ extern const unsigned short spritesheetTiles[16384];
 extern const unsigned short spritesheetPal[256];
 # 6 "main.c" 2
 # 1 "game.h" 1
-
-
-
-
-u8 colorAt(int x, int y);
-u8 mapCollide(int x, int y);
-
-void initGame();
-void initPlayer();
-void initEnemies();
-
-void updateGame();
-void updateCamera();
-void updatePlayer();
-void updateEnemies();
-
-void drawGame();
-void drawPlayer();
-void drawEnemies();
-
-
-
-
-
-
-
+# 11 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
-typedef enum {IDLE, WALK, DODGE, HIT} ANIMATION_STATE;
+typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 
 static int idleFrames[] = {0};
 static int walkFrames[] = {1, 2, 3, 4, 5, 6};
 static int dodgeFrames[] = {7, 8, 9, 10, 11, 12};
+static int attackFrames[] = {32, 33, 34, 35, 36};
+static int swordFrames[] = {37, 38, 39, 40, 41};
+static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
+static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
+static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
 
 typedef struct {
     int x;
@@ -356,6 +336,24 @@ typedef struct {
 } Player;
 
 typedef struct {
+    int active;
+    int offX;
+    int offY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    int timeUntilNextFrame;
+    int* frames;
+    int numFrames;
+    u8 oamIndex;
+} Sword;
+
+
+
+
+typedef struct {
+    int active;
     int x;
     int y;
     int vX;
@@ -372,6 +370,31 @@ typedef struct {
     ANIMATION_STATE state;
     u8 oamIndex;
 } Enemy;
+
+u8 colorAt(int x, int y);
+u8 mapCollide(int x, int y);
+
+void initGame();
+void initPlayer();
+void initSword();
+void initEnemies();
+
+void updateGame();
+void updateCamera();
+void updatePlayer();
+void attack();
+void updateEnemies();
+void updateEnemy(Enemy* enemy);
+void checkEntityCollisions();
+
+void drawGame();
+void drawPlayer();
+void drawEnemies();
+
+extern Player player;
+extern Sword sword;
+extern Enemy enemies[1];
+extern int lives;
 # 7 "main.c" 2
 # 1 "tileset.h" 1
 # 21 "tileset.h"
@@ -398,10 +421,21 @@ extern const unsigned short testmapcmBitmap[32768];
 
 extern const unsigned short testmapcmPal[256];
 # 9 "main.c" 2
+# 1 "mode4.h" 1
+# 9 "mode4.h"
+void flipPages();
+void setPixel4(int x, int y, unsigned char colorIndex);
+void drawRect4(int x, int y, int width, int height, volatile unsigned char colorIndex);
+void fillScreen4(volatile unsigned char colorIndex);
+void drawImage4(int x, int y, int width, int height, const unsigned short *image);
+void drawFullscreenImage4(const unsigned short *image);
+# 10 "main.c" 2
 
 void initialize();
 void goToStart();
 void start();
+void goToInstructions();
+void instructions();
 void goToGame();
 void game();
 void goToPause();
@@ -416,6 +450,7 @@ u16 oldButtons;
 
 enum State {
     START,
+    INSTRUCTIONS,
     GAME,
     PAUSE,
     WIN,
@@ -435,6 +470,9 @@ int main() {
         switch (state) {
             case START:
                 start();
+                break;
+            case INSTRUCTIONS:
+                instructions();
                 break;
             case GAME:
                 game();
@@ -457,63 +495,100 @@ int main() {
 
 void initialize() {
     mgba_open();
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << 12);
-
     DMANow(3, tilesetPal, ((unsigned short *)0x5000000), 256);
-    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
     DMANow(3, spritesheetPal, ((u16 *)0x5000200), 256);
-    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
-
     goToStart();
 }
 
 void goToStart() {
-    hideSprites();
+    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
+    fillScreen4(5);
     state = START;
 }
 
 void start() {
+    mgba_printf("In start screen...");
+    if ((!(~(oldButtons) & ((1<<2))) && (~(buttons) & ((1<<2))))) {
+        goToInstructions();
+    }
+    if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
+        goToGame();
+    }
+}
+
+void goToInstructions() {
+    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
+    fillScreen4(4);
+    state = INSTRUCTIONS;
+}
+
+void instructions() {
+    if ((!(~(oldButtons) & ((1<<2))) && (~(buttons) & ((1<<2))))) {
+        goToStart();
+    }
+
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToGame();
     }
 }
 
 void goToGame() {
-    hideSprites();
+    mgba_printf("Entering game...");
 
     (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
+    hideSprites();
     (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((31) << 8) | (0 << 7);
     (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((30) << 8) | (0 << 7);
     (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((29) << 8) | (0 << 7);
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
 
     DMANow(3, testmapLayer0Map, &((SB*) 0x6000000)[29], sizeof(testmapLayer0Map) / 2);
     DMANow(3, testmapLayer1Map, &((SB*) 0x6000000)[30], sizeof(testmapLayer1Map) / 2);
     DMANow(3, testmapLayer2Map, &((SB*) 0x6000000)[31], sizeof(testmapLayer2Map) / 2);
 
+    lives = 1;
     state = GAME;
     initGame();
 }
 
 void game() {
     updateGame();
-    drawGame();
 
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToPause();
     }
+
+    if (lives <= 0) {
+        goToLose();
+    }
+    for (int i = 0; i < 1; i++) {
+        if (enemies[i].active) break;
+        goToWin();
+    }
+
+    drawGame();
 }
 
 void goToPause() {
+    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
+    fillScreen4(1);
     state = PAUSE;
 }
 
 void pause() {
+    if ((!(~(oldButtons) & ((1<<2))) && (~(buttons) & ((1<<2))))) {
+        goToStart();
+    }
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToGame();
     }
 }
 
 void goToWin() {
+    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
+    fillScreen4(2);
     state = WIN;
 }
 
@@ -524,6 +599,8 @@ void win() {
 }
 
 void goToLose() {
+    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
+    fillScreen4(3);
     state = LOSE;
 }
 
