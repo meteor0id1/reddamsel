@@ -4,38 +4,28 @@
 #include "print.h"
 #include "mode0.h"
 #include "sprites.h"
-#include "testmap.h"
-
-u8 colorAt(int x, int y) {
-    if (!testmapcmBitmap) {
-        return 0;
-    }
-
-    const u8* byteMap = (const u8*)testmapcmBitmap;
-    return byteMap[OFFSET(x, y, TESTMAP_WIDTH)];
-}
-
-u8 mapCollide(int x, int y) {
-    if (x < 0 || x >= TESTMAP_WIDTH || y < 0 || y >= TESTMAP_HEIGHT) return 1;
-    return colorAt(x, y) != 0;
-}
+#include "level1Map.h"
+#include "utils.h"
+#include "level1CM.h"
 
 Player player;
 Sword sword;
 Enemy enemies[MAX_ENEMIES];
-int lives = 1;
-
+Bullet bullets[MAX_BULLETS];
+int lives;
+int winFlag;
 int hOff, vOff;
 
 void initGame() {
     initPlayer();
     initSword();
     initEnemies();
+    initBullets();
 }
 
 void initPlayer() {
-    player.x = TO_FIXED(120);
-    player.y = TO_FIXED(80);
+    player.x = TO_FIXED(80);
+    player.y = TO_FIXED(460);
     player.vX = 0;
     player.vY = 0;
     player.hitboxOffX = 4;
@@ -45,7 +35,7 @@ void initPlayer() {
     player.timeUntilNextFrame = 5;
     player.direction = LEFT;
     player.currentFrame = 0;
-    player.frames = idleFrames;
+    player.frames = playerIdleFrames;
     player.numFrames = 1;
     player.state = IDLE;
     player.oamIndex = 1;
@@ -67,8 +57,8 @@ void initSword() {
 
 void initEnemies() {
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        enemies[i].x = TO_FIXED(80 + i * 40);
-        enemies[i].y = TO_FIXED(60);
+        enemies[i].x = TO_FIXED(enemyPatrolPoints[i][0][0]);
+        enemies[i].y = TO_FIXED(enemyPatrolPoints[i][0][1]);
         enemies[i].vX = 0;
         enemies[i].vY = 0;
         enemies[i].hitboxOffX = 4;
@@ -76,19 +66,39 @@ void initEnemies() {
         enemies[i].hitboxW = 8;
         enemies[i].hitboxH = 8;
         enemies[i].timeUntilNextFrame = 10;
+        enemies[i].state = PATROL;
         enemies[i].direction = LEFT;
         enemies[i].currentFrame = 0;
-        enemies[i].frames = idleFrames;
+        enemies[i].frames = enemyIdleFrames;
         enemies[i].numFrames = 1;
-        enemies[i].state = IDLE;
+        enemies[i].animState = IDLE;
+        enemies[i].patrolTargetIndex = 1;
+        enemies[i].firedShot = 0;
         enemies[i].oamIndex = i + 2;
         enemies[i].active = 1;
+    }
+}
+
+void initBullets() {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        bullets[i].active = 0;
+        bullets[i].x = 0;
+        bullets[i].y = 0;
+        bullets[i].vX = 0;
+        bullets[i].vY = 0;
+        bullets[i].hitboxOffX = 2;
+        bullets[i].hitboxOffY = 0;
+        bullets[i].hitboxW = 4;
+        bullets[i].hitboxH = 4;
+        bullets[i].direction = LEFT;
+        bullets[i].oamIndex = MAX_ENEMIES + 2 + i;
     }
 }
 
 void updateGame() {
     updatePlayer();
     updateEnemies();
+    updateBullets();
     updateCamera();
     checkEntityCollisions();
 }
@@ -97,8 +107,8 @@ void updateCamera() {
     int targetX = FROM_FIXED(player.x) - (SCREENWIDTH / 2);
     int targetY = FROM_FIXED(player.y) - (SCREENHEIGHT / 2);
     
-    int maxOffX = TESTMAP_WIDTH - SCREENWIDTH;
-    int maxOffY = TESTMAP_HEIGHT - SCREENHEIGHT;
+    int maxOffX = LEVEL1MAP_WIDTH - SCREENWIDTH;
+    int maxOffY = LEVEL1MAP_HEIGHT - SCREENHEIGHT;
     if (maxOffX < 0) {
         maxOffX = 0;
     }
@@ -132,13 +142,13 @@ void updateCamera() {
 void updatePlayer() {    
     player.timeUntilNextFrame--;
     if (player.timeUntilNextFrame <= 0) {
-        player.timeUntilNextFrame = (player.state == ATTACK) ? 5 : 6;
+        player.timeUntilNextFrame = (player.state == ATTACK) ? FRAME_DURATION : FRAME_DURATION + 1;
         player.currentFrame++;
 
         if (player.currentFrame >= player.numFrames) {
             if (player.state == ATTACK || player.state == DODGE) {
                 player.state = IDLE;
-                player.frames = idleFrames;
+                player.frames = playerIdleFrames;
                 player.numFrames = 1;
                 sword.active = 0;
             }
@@ -158,8 +168,8 @@ void updatePlayer() {
 
     if (BUTTON_PRESSED(BUTTON_LSHOULDER) && player.state != DODGE) {
         player.state = DODGE;
-        player.frames = dodgeFrames;
-        player.numFrames = 6;
+        player.frames = playerDodgeFrames;
+        player.numFrames = 5;
         player.currentFrame = 0;
         player.timeUntilNextFrame = 6;
     }
@@ -174,18 +184,39 @@ void updatePlayer() {
         player.vY = (player.vY * 3) / 2;
     }
 
-    
-    if (mapCollide(FROM_FIXED(player.x + player.vX) + player.hitboxOffX, FROM_FIXED(player.y) + player.hitboxOffY) ||
-        mapCollide(FROM_FIXED(player.x + player.vX) + player.hitboxOffX + player.hitboxW - 1, FROM_FIXED(player.y) + player.hitboxOffY) ||
-        mapCollide(FROM_FIXED(player.x + player.vX) + player.hitboxOffX, FROM_FIXED(player.y) + player.hitboxOffY + player.hitboxH - 1) ||
-        mapCollide(FROM_FIXED(player.x + player.vX) + player.hitboxOffX + player.hitboxW - 1, FROM_FIXED(player.y) + player.hitboxOffY + player.hitboxH - 1)) {
+    int playerLeft = FROM_FIXED(player.x + player.vX) + player.hitboxOffX;
+    int playerTop = FROM_FIXED(player.y) + player.hitboxOffY;
+    int playerRight = playerLeft + player.hitboxW - 1;
+    int playerBottom = playerTop + player.hitboxH - 1;
+
+    if (mapCollide(playerLeft, playerTop, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerRight, playerTop, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerLeft, playerBottom, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerRight, playerBottom, PLAYER_COLLISION_MASK)) {
         player.vX = 0;
     }
-    if (mapCollide(FROM_FIXED(player.x) + player.hitboxOffX, FROM_FIXED(player.y + player.vY) + player.hitboxOffY) ||
-        mapCollide(FROM_FIXED(player.x) + player.hitboxOffX + player.hitboxW - 1, FROM_FIXED(player.y + player.vY) + player.hitboxOffY) ||  
-        mapCollide(FROM_FIXED(player.x) + player.hitboxOffX, FROM_FIXED(player.y + player.vY) + player.hitboxOffY + player.hitboxH - 1) ||
-        mapCollide(FROM_FIXED(player.x) + player.hitboxOffX + player.hitboxW - 1, FROM_FIXED(player.y + player.vY) + player.hitboxOffY + player.hitboxH - 1)) {
+
+    playerLeft = FROM_FIXED(player.x) + player.hitboxOffX;
+    playerTop = FROM_FIXED(player.y + player.vY) + player.hitboxOffY;
+    playerRight = playerLeft + player.hitboxW - 1;
+    playerBottom = playerTop + player.hitboxH - 1;
+
+    if (mapCollide(playerLeft, playerTop, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerRight, playerTop, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerLeft, playerBottom, PLAYER_COLLISION_MASK) ||
+        mapCollide(playerRight, playerBottom, PLAYER_COLLISION_MASK)) {
         player.vY = 0;
+    }
+
+    playerLeft = FROM_FIXED(player.x) + player.hitboxOffX;
+    playerTop = FROM_FIXED(player.y) + player.hitboxOffY;
+    playerRight = playerLeft + player.hitboxW - 1;
+    playerBottom = playerTop + player.hitboxH - 1;
+
+    if (colorAt(playerLeft, playerTop) == 2 || colorAt(playerRight, playerTop) == 2 ||
+        colorAt(playerLeft, playerBottom) == 2 || colorAt(playerRight, playerBottom) == 2) {
+        winFlag = 1;
+        return;
     }
 
     // Take magnitute of velocity for diagonal movement
@@ -201,12 +232,12 @@ void updatePlayer() {
 
     if (player.vX == 0 && player.vY == 0) {
         player.state = IDLE;
-        player.frames = idleFrames;
+        player.frames = playerIdleFrames;
         player.numFrames = 1;
         player.currentFrame = 0;
     } else {
         player.state = WALK;
-        player.frames = walkFrames;
+        player.frames = playerWalkFrames;
         player.numFrames = 5;
     }
 }
@@ -214,16 +245,16 @@ void updatePlayer() {
 void attack() {
     if (player.state == ATTACK || player.state == DODGE) return;
     player.state = ATTACK;
-    player.frames = attackFrames;
-    player.numFrames = 5;
+    player.frames = playerAttackFrames;
+    player.numFrames = 4;
     player.currentFrame = 0;
-    player.timeUntilNextFrame = 5;
+    player.timeUntilNextFrame = FRAME_DURATION;
 
     sword.active = 1;
     player.direction = player.direction;
     sword.frames = swordFrames;
     sword.numFrames = 5;
-    sword.timeUntilNextFrame = 5;
+    sword.timeUntilNextFrame = FRAME_DURATION;
 }
 
 void updateEnemies() {
@@ -234,45 +265,118 @@ void updateEnemies() {
 }
 
 void updateEnemy(Enemy* enemy) {
+    int enemyIndex = enemy - enemies;
+    enemy->vX = 0;
+    enemy->vY = 0;
+
+    if (enemy->animState == ATTACK) {
+        enemy->frames = enemyAttackFrames;
+        enemy->numFrames = 7;
+        if (!enemy->firedShot && enemy->currentFrame >= ENEMY_ATTACK_FRAME) {
+            spawnBullet(enemy->x, enemy->y, enemy->direction);
+            enemy->firedShot = 1;
+        }
+    } else {
+        int targetX = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][0];
+        int targetY = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][1];
+        int enemyX = FROM_FIXED(enemy->x);
+        int enemyY = FROM_FIXED(enemy->y);
+        int dX = targetX - enemyX;
+        int dY = targetY - enemyY;
+
+        if (abs(dX) <= 2 && abs(dY) <= 2) {
+            enemy->animState = ATTACK;
+            enemy->frames = enemyAttackFrames;
+            enemy->numFrames = 7;
+            enemy->currentFrame = 0;
+            enemy->timeUntilNextFrame = 5;
+            enemy->firedShot = 0;
+            enemy->patrolTargetIndex = (enemy->patrolTargetIndex + 1) % (sizeof(enemyPatrolPoints[enemyIndex]) / sizeof(enemyPatrolPoints[enemyIndex][0]));
+            dX = 0;
+            dY = 0;
+        } else {
+            if (abs(dX)) {
+                enemy->vX = (dX < 0) ? -ENEMY_SPEED : ENEMY_SPEED;
+                enemy->direction = (dX < 0) ? LEFT : RIGHT;
+            } else {
+                enemy->vY = (dY < 0) ? -ENEMY_SPEED : ENEMY_SPEED;
+                enemy->direction = (dY < 0) ? UP : DOWN;
+            }
+            enemy->animState = WALK;
+            enemy->frames = enemyWalkFrames;
+            enemy->numFrames = 5;
+        }
+    }
+
     enemy->timeUntilNextFrame--;
     if (enemy->timeUntilNextFrame <= 0) {
-        enemy->timeUntilNextFrame = 5;
+        enemy->timeUntilNextFrame = FRAME_DURATION;
         enemy->currentFrame++;
 
         if (enemy->currentFrame >= enemy->numFrames) {
+            if (enemy->animState == ATTACK) {
+                enemy->animState = IDLE;
+                enemy->frames = enemyIdleFrames;
+                enemy->numFrames = 1;
+                enemy->firedShot = 0;
+            }
             enemy->currentFrame = 0;
         }
     }
 
-    enemy->vX = 0;
-    enemy->vY = 0;
+    enemy->x += enemy->vX;
+    enemy->y += enemy->vY;
+}
 
-    int playerX = FROM_FIXED(player.x);
-    int playerY = FROM_FIXED(player.y);
-    int enemyX = FROM_FIXED(enemy->x);
-    int enemyY = FROM_FIXED(enemy->y);
-    if (playerX < enemyX - 4) {
-        enemy->vX = -ENEMY_SPEED;
-        enemy->direction = LEFT;
-    } else if (playerX > enemyX + 4) {
-        enemy->vX = ENEMY_SPEED;
-        enemy->direction = RIGHT;
-    }
-    if (playerY < enemyY - 4) {
-        enemy->vY = -ENEMY_SPEED;
-        enemy->direction = UP;
-    } else if (playerY > enemyY + 4) {
-        enemy->vY = ENEMY_SPEED;
-        enemy->direction = DOWN;
-    }
+void spawnBullet(int x, int y, DIRECTION direction) {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!bullets[i].active) {
+            bullets[i].active = 1;
+            bullets[i].x = x + TO_FIXED(6);
+            bullets[i].y = y + TO_FIXED(6);
+            bullets[i].vX = 0;
+            bullets[i].vY = 0;
+            bullets[i].direction = direction;
+            bullets[i].lifetime = BULLET_MAX_LIFETIME;
 
-    // Take magnitute of velocity for diagonal movement
-    if (enemy->vX != 0 && enemy->vY != 0) {
-        enemy->x += enemy->vX / 1.4;
-        enemy->y += enemy->vY / 1.4;
-    } else {
-        enemy->x += enemy->vX;
-        enemy->y += enemy->vY;
+            if (direction == LEFT) {
+                bullets[i].vX = -BULLET_SPEED;
+            } else if (direction == RIGHT) {
+                bullets[i].vX = BULLET_SPEED;
+            } else if (direction == UP) {
+                bullets[i].vY = -BULLET_SPEED;
+            } else {
+                bullets[i].vY = BULLET_SPEED;
+            }
+            return;
+        }
+    }
+}
+
+void updateBullets() {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!bullets[i].active) continue;
+
+        bullets[i].x += bullets[i].vX;
+        bullets[i].y += bullets[i].vY;
+        bullets[i].lifetime--;
+
+        int bulletLeft = FROM_FIXED(bullets[i].x) + bullets[i].hitboxOffX;
+        int bulletTop = FROM_FIXED(bullets[i].y) + bullets[i].hitboxOffY;
+        int bulletRight = bulletLeft + bullets[i].hitboxW - 1;
+        int bulletBottom = bulletTop + bullets[i].hitboxH - 1;
+
+        if (bullets[i].lifetime <= 0 || bulletLeft < 0 || bulletRight >= LEVEL1MAP_WIDTH || bulletTop < 0 || bulletBottom >= LEVEL1MAP_HEIGHT) {
+            bullets[i].active = 0;
+            continue;
+        }
+
+        if (mapCollide(bulletLeft, bulletTop, BULLET_COLLISION_MASK) ||
+            mapCollide(bulletRight, bulletTop, BULLET_COLLISION_MASK) ||
+            mapCollide(bulletLeft, bulletBottom, BULLET_COLLISION_MASK) ||
+            mapCollide(bulletRight, bulletBottom, BULLET_COLLISION_MASK)) {
+            bullets[i].active = 0;
+        }
     }
 }
 
@@ -313,6 +417,19 @@ void checkEntityCollisions() {
     int pRight  = pLeft + player.hitboxW;
     int pBottom = pTop + player.hitboxH;
 
+    if (player.state != DODGE && player.state != HIT) {
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (!bullets[i].active) continue;
+            int bulletX = FROM_FIXED(bullets[i].x);
+            int bulletY = FROM_FIXED(bullets[i].y);
+            if (hitboxCollide(pLeft, pTop, player.hitboxW, player.hitboxH, bulletX + bullets[i].hitboxOffX, bulletY + bullets[i].hitboxOffY, bullets[i].hitboxW, bullets[i].hitboxH)) {
+                bullets[i].active = 0;
+                lives--;
+                mgba_printf("Player hit by bullet!");
+            }
+        }
+    }
+
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
         int enemyX = FROM_FIXED(enemies[i].x);
@@ -328,6 +445,7 @@ void checkEntityCollisions() {
         }
 
         // Check player collision with enemy
+        if (player.state == DODGE || player.state == HIT) continue;
         if (pLeft < enemyX + enemies[i].hitboxOffX + enemies[i].hitboxW &&
             pRight > enemyX + enemies[i].hitboxOffX &&
             pTop < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
@@ -339,20 +457,22 @@ void checkEntityCollisions() {
 }
 
 void drawGame() {
+    drawHUD();
     drawPlayer();
     drawEnemies();
+    drawBullets();
 
     waitForVBlank();
     DMANow(3, shadowOAM, OAM, 128*4);
 }
 
 void drawPlayer() {        
-    shadowOAM[player.oamIndex].attr0 = FROM_FIXED(player.y) - vOff | ATTR0_4BPP | ATTR0_SQUARE;
-    shadowOAM[player.oamIndex].attr1 = FROM_FIXED(player.x) - hOff | ATTR1_SMALL | (player.direction == RIGHT ? ATTR1_HFLIP : 0);
+    shadowOAM[player.oamIndex].attr0 = ROWMASK(FROM_FIXED(player.y) - vOff) | ATTR0_4BPP | ATTR0_SQUARE;
+    shadowOAM[player.oamIndex].attr1 = COLMASK(FROM_FIXED(player.x) - hOff) | ATTR1_SMALL | (player.direction == RIGHT ? ATTR1_HFLIP : 0);
     if (player.direction == LEFT) {
-        shadowOAM[player.oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(player.frames[player.currentFrame] * 2, player.direction * 4);
+        shadowOAM[player.oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(player.frames[player.currentFrame], player.direction * 4) | ATTR2_PRIORITY(2);
     } else {
-        shadowOAM[player.oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(player.frames[player.currentFrame] * 2, (player.direction - 1) * 4);
+        shadowOAM[player.oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(player.frames[player.currentFrame], (player.direction - 1) * 4) | ATTR2_PRIORITY(2);
     }
 
     if (!sword.active) {
@@ -365,42 +485,69 @@ void drawPlayer() {
         case LEFT:
             swordX = FROM_FIXED(player.x) + swordOffsetSide[player.currentFrame][0];
             swordY = FROM_FIXED(player.y) + swordOffsetSide[player.currentFrame][1];
-            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame] * 2, LEFT * 2);
+            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame], LEFT * 2);
             break;
         case RIGHT:
             swordX = FROM_FIXED(player.x) - swordOffsetSide[player.currentFrame][0];
             swordY = FROM_FIXED(player.y) + swordOffsetSide[player.currentFrame][1];
-            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame] * 2, LEFT * 2);
+            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame], LEFT * 2);
             break;
         case DOWN:
             swordX = FROM_FIXED(player.x) + swordOffsetDown[player.currentFrame][0];
             swordY = FROM_FIXED(player.y) + swordOffsetDown[player.currentFrame][1];
-            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame] * 2, DOWN * 2);
+            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame], DOWN * 2);
             break;
         case UP:
             swordX = FROM_FIXED(player.x) + swordOffsetUp[player.currentFrame][0];
             swordY = FROM_FIXED(player.y) + swordOffsetUp[player.currentFrame][1];
-            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame] * 2, UP * 2 + 2);
+            frameTile = ATTR2_TILEID(sword.frames[player.currentFrame], UP * 2 + 2);
             break;
     }
 
-    shadowOAM[sword.oamIndex].attr0 = swordY - vOff | ATTR0_4BPP | ATTR0_SQUARE;
-    shadowOAM[sword.oamIndex].attr1 = swordX - hOff | ATTR1_SMALL | (player.direction == RIGHT ? ATTR1_HFLIP : 0);
-    shadowOAM[sword.oamIndex].attr2 = ATTR2_PALROW(0) | frameTile;
+    shadowOAM[sword.oamIndex].attr0 = ROWMASK(swordY - vOff) | ATTR0_4BPP | ATTR0_SQUARE;
+    shadowOAM[sword.oamIndex].attr1 = COLMASK(swordX - hOff) | ATTR1_SMALL | (player.direction == RIGHT ? ATTR1_HFLIP : 0);
+    shadowOAM[sword.oamIndex].attr2 = ATTR2_PALROW(0) | frameTile | ATTR2_PRIORITY(2);
 }
 
 void drawEnemies() {
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (!enemies[i].active) {
-            shadowOAM[enemies[i].oamIndex].attr0 = ATTR0_HIDE;
+        Enemy* enemy = &enemies[i];
+        if (!enemy->active || clipSpritesOffScreen(enemy->oamIndex, FROM_FIXED(enemy->x) - hOff, FROM_FIXED(enemy->y) - vOff, 16, 16)) {
+            shadowOAM[enemy->oamIndex].attr0 = ATTR0_HIDE;
             continue;
         }
-        shadowOAM[enemies[i].oamIndex].attr0 = FROM_FIXED(enemies[i].y) - vOff | ATTR0_4BPP | ATTR0_SQUARE;
-        shadowOAM[enemies[i].oamIndex].attr1 = FROM_FIXED(enemies[i].x) - hOff | ATTR1_SMALL | (enemies[i].direction == RIGHT ? ATTR1_HFLIP : 0);
-        if (enemies[i].direction == LEFT) {
-            shadowOAM[enemies[i].oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(enemies[i].frames[enemies[i].currentFrame] * 2, LEFT * 4);
+        shadowOAM[enemy->oamIndex].attr0 = ROWMASK(FROM_FIXED(enemy->y) - vOff) | ATTR0_4BPP | ATTR0_SQUARE;
+        shadowOAM[enemy->oamIndex].attr1 = COLMASK(FROM_FIXED(enemy->x) - hOff) | ATTR1_SMALL | (enemy->direction == RIGHT ? ATTR1_HFLIP : 0);
+        if (enemy->direction == LEFT) {
+            shadowOAM[enemy->oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(enemy->frames[enemy->currentFrame], ENEMY_ROW_OFFSET) | ATTR2_PRIORITY(2);
         } else {
-            shadowOAM[enemies[i].oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(enemies[i].frames[enemies[i].currentFrame] * 2, (enemies[i].direction - 1) * 4);
+            shadowOAM[enemy->oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(enemy->frames[enemy->currentFrame], ENEMY_ROW_OFFSET + (enemy->direction - 1) * 2) | ATTR2_PRIORITY(2);
         }
+    }
+}
+
+void drawBullets() {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        Bullet* bullet = &bullets[i];
+        if (!bullet->active || clipSpritesOffScreen(bullet->oamIndex, FROM_FIXED(bullet->x) - hOff, FROM_FIXED(bullet->y) - vOff, 8, 8)) {
+            shadowOAM[bullet->oamIndex].attr0 = ATTR0_HIDE;
+            continue;
+        }
+
+        shadowOAM[bullet->oamIndex].attr0 = ROWMASK(FROM_FIXED(bullet->y) - vOff) | ATTR0_4BPP | ATTR0_SQUARE;
+        shadowOAM[bullet->oamIndex].attr1 = COLMASK(FROM_FIXED(bullet->x) - hOff) | ATTR1_TINY | (bullet->direction == RIGHT ? ATTR1_HFLIP : 0);
+        if (bullet->direction == LEFT) {
+            shadowOAM[bullet->oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(26, ENEMY_ROW_OFFSET + (2 * bullet->direction)) | ATTR2_PRIORITY(2);
+        } else {
+            shadowOAM[bullet->oamIndex].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(26, ENEMY_ROW_OFFSET + (2 * (bullet->direction - 1))) | ATTR2_PRIORITY(2);
+        }
+    }
+}
+
+void drawHUD() {
+    for (int i = 0; i < MAX_LIVES; i++) {
+        int tile = (i < lives) ? HUD_LIFE_TILE : HUD_LIFE_TILE + 1;
+        SCREENBLOCK[HUD_SCREENBLOCK].tilemap[1 * 32 + i + 1] =
+            TILEMAP_ENTRY_TILEID(tile) | TILEMAP_ENTRY_PALROW(HUD_PALROW);
     }
 }

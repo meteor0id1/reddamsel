@@ -79,4 +79,7 @@ typedef struct {
   u8 oamIndex; 
 } SPRITE;
 
+#define ROWMASK(x) ((x) & 0xFF)
+#define COLMASK(x) ((x) & 0x1FF)
+
 #endif

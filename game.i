@@ -955,24 +955,24 @@ typedef struct {
   u8 oamIndex;
 } SPRITE;
 # 4 "game.h" 2
-
-
-
-
-
-
-
+# 16 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
+typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
 
-static int idleFrames[] = {0};
-static int walkFrames[] = {1, 2, 3, 4, 5, 6};
-static int dodgeFrames[] = {7, 8, 9, 10, 11, 12};
-static int attackFrames[] = {32, 33, 34, 35, 36};
-static int swordFrames[] = {37, 38, 39, 40, 41};
+static int playerIdleFrames[] = {0};
+static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
+static int playerDodgeFrames[] = {14, 16, 18, 20, 22, 24};
+static int playerAttackFrames[] = {64, 66, 68, 70};
+static int swordFrames[] = {74, 76, 78, 80};
 static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
 static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
 static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
+static int enemyPatrolPoints[][4][2] = {{{176, 416}, {232, 416}, {232, 472}, {176, 472}}, {{348, 408}, {392, 408}, {392, 456}, {348, 456}},
+                                        {{384, 368}, {472, 368}, {472, 400}, {384, 400}}, {{184, 232}, {232, 232}, {232, 288}, {184, 288}}};
+static int enemyIdleFrames[] = {0};
+static int enemyWalkFrames[] = {2, 4, 6, 8, 10};
+static int enemyAttackFrames[] = {12, 14, 16, 18, 20, 22, 24};
 
 typedef struct {
     int x;
@@ -1005,6 +1005,29 @@ typedef struct {
     int numFrames;
     u8 oamIndex;
 } Sword;
+# 73 "game.h"
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int vX;
+    int vY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    ENEMY_STATE state;
+    int shotCooldown;
+    int timeUntilNextFrame;
+    DIRECTION direction;
+    int currentFrame;
+    int* frames;
+    int numFrames;
+    ANIMATION_STATE animState;
+    int patrolTargetIndex;
+    int firedShot;
+    u8 oamIndex;
+} Enemy;
 
 
 
@@ -1019,22 +1042,16 @@ typedef struct {
     int hitboxOffY;
     int hitboxW;
     int hitboxH;
-    int timeUntilNextFrame;
     DIRECTION direction;
-    int currentFrame;
-    int* frames;
-    int numFrames;
-    ANIMATION_STATE state;
+    int lifetime;
     u8 oamIndex;
-} Enemy;
-
-u8 colorAt(int x, int y);
-u8 mapCollide(int x, int y);
+} Bullet;
 
 void initGame();
 void initPlayer();
 void initSword();
 void initEnemies();
+void initBullets();
 
 void updateGame();
 void updateCamera();
@@ -1042,16 +1059,22 @@ void updatePlayer();
 void attack();
 void updateEnemies();
 void updateEnemy(Enemy* enemy);
+void updateBullets();
+void spawnBullet(int x, int y, DIRECTION direction);
 void checkEntityCollisions();
 
 void drawGame();
 void drawPlayer();
 void drawEnemies();
+void drawBullets();
+void drawHUD();
 
 extern Player player;
 extern Sword sword;
-extern Enemy enemies[1];
+extern Enemy enemies[4];
+extern Bullet bullets[16];
 extern int lives;
+extern int winFlag;
 # 4 "game.c" 2
 # 1 "print.h" 1
 # 35 "print.h"
@@ -1063,7 +1086,7 @@ void mgba_close(void);
 # 5 "game.c" 2
 
 
-# 1 "testmap.h" 1
+# 1 "level1Map.h" 1
 
 
 
@@ -1071,47 +1094,51 @@ void mgba_close(void);
 
 
 
-extern const unsigned short testmapLayer0Map[1024];
-extern const unsigned short testmapLayer1Map[1024];
-extern const unsigned short testmapLayer2Map[1024];
-
-
-extern const unsigned short testmapcmBitmap[32768];
-
-
-extern const unsigned short testmapcmPal[256];
+extern const unsigned short level1MapLayer0Map[4096];
+extern const unsigned short level1MapLayer1Map[4096];
+extern const unsigned short level1MapLayer2Map[4096];
+extern const unsigned short level1MapLayer3Map[4096];
 # 8 "game.c" 2
+# 1 "utils.h" 1
 
-u8 colorAt(int x, int y) {
-    if (!testmapcmBitmap) {
-        return 0;
-    }
 
-    const u8* byteMap = (const u8*)testmapcmBitmap;
-    return byteMap[((y) * ((256)) + (x))];
-}
 
-u8 mapCollide(int x, int y) {
-    if (x < 0 || x >= (256) || y < 0 || y >= (256)) return 1;
-    return colorAt(x, y) != 0;
-}
+
+
+
+int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
+void clearBackground(int screenblock, u16 tileEntry);
+u8 colorAt(int x, int y);
+u8 mapCollide(int x, int y, u32 colorMask);
+u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
+void resetOff();
+# 9 "game.c" 2
+# 1 "level1CM.h" 1
+# 21 "level1CM.h"
+extern const unsigned short level1CMBitmap[131072];
+
+
+extern const unsigned short level1CMPal[256];
+# 10 "game.c" 2
 
 Player player;
 Sword sword;
-Enemy enemies[1];
-int lives = 1;
-
+Enemy enemies[4];
+Bullet bullets[16];
+int lives;
+int winFlag;
 int hOff, vOff;
 
 void initGame() {
     initPlayer();
     initSword();
     initEnemies();
+    initBullets();
 }
 
 void initPlayer() {
-    player.x = ((120) << 4);
-    player.y = ((80) << 4);
+    player.x = ((80) << 4);
+    player.y = ((460) << 4);
     player.vX = 0;
     player.vY = 0;
     player.hitboxOffX = 4;
@@ -1121,7 +1148,7 @@ void initPlayer() {
     player.timeUntilNextFrame = 5;
     player.direction = LEFT;
     player.currentFrame = 0;
-    player.frames = idleFrames;
+    player.frames = playerIdleFrames;
     player.numFrames = 1;
     player.state = IDLE;
     player.oamIndex = 1;
@@ -1142,9 +1169,9 @@ void initSword() {
 }
 
 void initEnemies() {
-    for (int i = 0; i < 1; i++) {
-        enemies[i].x = ((80 + i * 40) << 4);
-        enemies[i].y = ((60) << 4);
+    for (int i = 0; i < 4; i++) {
+        enemies[i].x = ((enemyPatrolPoints[i][0][0]) << 4);
+        enemies[i].y = ((enemyPatrolPoints[i][0][1]) << 4);
         enemies[i].vX = 0;
         enemies[i].vY = 0;
         enemies[i].hitboxOffX = 4;
@@ -1152,19 +1179,39 @@ void initEnemies() {
         enemies[i].hitboxW = 8;
         enemies[i].hitboxH = 8;
         enemies[i].timeUntilNextFrame = 10;
+        enemies[i].state = PATROL;
         enemies[i].direction = LEFT;
         enemies[i].currentFrame = 0;
-        enemies[i].frames = idleFrames;
+        enemies[i].frames = enemyIdleFrames;
         enemies[i].numFrames = 1;
-        enemies[i].state = IDLE;
+        enemies[i].animState = IDLE;
+        enemies[i].patrolTargetIndex = 1;
+        enemies[i].firedShot = 0;
         enemies[i].oamIndex = i + 2;
         enemies[i].active = 1;
+    }
+}
+
+void initBullets() {
+    for (int i = 0; i < 16; i++) {
+        bullets[i].active = 0;
+        bullets[i].x = 0;
+        bullets[i].y = 0;
+        bullets[i].vX = 0;
+        bullets[i].vY = 0;
+        bullets[i].hitboxOffX = 2;
+        bullets[i].hitboxOffY = 0;
+        bullets[i].hitboxW = 4;
+        bullets[i].hitboxH = 4;
+        bullets[i].direction = LEFT;
+        bullets[i].oamIndex = 4 + 2 + i;
     }
 }
 
 void updateGame() {
     updatePlayer();
     updateEnemies();
+    updateBullets();
     updateCamera();
     checkEntityCollisions();
 }
@@ -1173,8 +1220,8 @@ void updateCamera() {
     int targetX = ((player.x) >> 4) - (240 / 2);
     int targetY = ((player.y) >> 4) - (160 / 2);
 
-    int maxOffX = (256) - 240;
-    int maxOffY = (256) - 160;
+    int maxOffX = (512) - 240;
+    int maxOffY = (512) - 160;
     if (maxOffX < 0) {
         maxOffX = 0;
     }
@@ -1208,13 +1255,13 @@ void updateCamera() {
 void updatePlayer() {
     player.timeUntilNextFrame--;
     if (player.timeUntilNextFrame <= 0) {
-        player.timeUntilNextFrame = (player.state == ATTACK) ? 5 : 6;
+        player.timeUntilNextFrame = (player.state == ATTACK) ? 5 : 5 + 1;
         player.currentFrame++;
 
         if (player.currentFrame >= player.numFrames) {
             if (player.state == ATTACK || player.state == DODGE) {
                 player.state = IDLE;
-                player.frames = idleFrames;
+                player.frames = playerIdleFrames;
                 player.numFrames = 1;
                 sword.active = 0;
             }
@@ -1227,15 +1274,15 @@ void updatePlayer() {
     player.vX = 0;
     player.vY = 0;
 
-    if ((~(buttons) & ((1<<6)))) { player.vY -= 12; player.direction = UP; }
-    if ((~(buttons) & ((1<<7)))) { player.vY += 12; player.direction = DOWN; }
-    if ((~(buttons) & ((1<<5)))) { player.vX -= 12; player.direction = LEFT; }
-    if ((~(buttons) & ((1<<4)))) { player.vX += 12; player.direction = RIGHT; }
+    if ((~(buttons) & ((1<<6)))) { player.vY -= 10; player.direction = UP; }
+    if ((~(buttons) & ((1<<7)))) { player.vY += 10; player.direction = DOWN; }
+    if ((~(buttons) & ((1<<5)))) { player.vX -= 10; player.direction = LEFT; }
+    if ((~(buttons) & ((1<<4)))) { player.vX += 10; player.direction = RIGHT; }
 
     if ((!(~(oldButtons) & ((1<<9))) && (~(buttons) & ((1<<9)))) && player.state != DODGE) {
         player.state = DODGE;
-        player.frames = dodgeFrames;
-        player.numFrames = 6;
+        player.frames = playerDodgeFrames;
+        player.numFrames = 5;
         player.currentFrame = 0;
         player.timeUntilNextFrame = 6;
     }
@@ -1250,18 +1297,39 @@ void updatePlayer() {
         player.vY = (player.vY * 3) / 2;
     }
 
+    int playerLeft = ((player.x + player.vX) >> 4) + player.hitboxOffX;
+    int playerTop = ((player.y) >> 4) + player.hitboxOffY;
+    int playerRight = playerLeft + player.hitboxW - 1;
+    int playerBottom = playerTop + player.hitboxH - 1;
 
-    if (mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX, ((player.y) >> 4) + player.hitboxOffY) ||
-        mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y) >> 4) + player.hitboxOffY) ||
-        mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX, ((player.y) >> 4) + player.hitboxOffY + player.hitboxH - 1) ||
-        mapCollide(((player.x + player.vX) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y) >> 4) + player.hitboxOffY + player.hitboxH - 1)) {
+    if (mapCollide(playerLeft, playerTop, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerRight, playerTop, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerLeft, playerBottom, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
         player.vX = 0;
     }
-    if (mapCollide(((player.x) >> 4) + player.hitboxOffX, ((player.y + player.vY) >> 4) + player.hitboxOffY) ||
-        mapCollide(((player.x) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y + player.vY) >> 4) + player.hitboxOffY) ||
-        mapCollide(((player.x) >> 4) + player.hitboxOffX, ((player.y + player.vY) >> 4) + player.hitboxOffY + player.hitboxH - 1) ||
-        mapCollide(((player.x) >> 4) + player.hitboxOffX + player.hitboxW - 1, ((player.y + player.vY) >> 4) + player.hitboxOffY + player.hitboxH - 1)) {
+
+    playerLeft = ((player.x) >> 4) + player.hitboxOffX;
+    playerTop = ((player.y + player.vY) >> 4) + player.hitboxOffY;
+    playerRight = playerLeft + player.hitboxW - 1;
+    playerBottom = playerTop + player.hitboxH - 1;
+
+    if (mapCollide(playerLeft, playerTop, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerRight, playerTop, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerLeft, playerBottom, ((1 << 1) | (1 << 3))) ||
+        mapCollide(playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
         player.vY = 0;
+    }
+
+    playerLeft = ((player.x) >> 4) + player.hitboxOffX;
+    playerTop = ((player.y) >> 4) + player.hitboxOffY;
+    playerRight = playerLeft + player.hitboxW - 1;
+    playerBottom = playerTop + player.hitboxH - 1;
+
+    if (colorAt(playerLeft, playerTop) == 2 || colorAt(playerRight, playerTop) == 2 ||
+        colorAt(playerLeft, playerBottom) == 2 || colorAt(playerRight, playerBottom) == 2) {
+        winFlag = 1;
+        return;
     }
 
 
@@ -1277,12 +1345,12 @@ void updatePlayer() {
 
     if (player.vX == 0 && player.vY == 0) {
         player.state = IDLE;
-        player.frames = idleFrames;
+        player.frames = playerIdleFrames;
         player.numFrames = 1;
         player.currentFrame = 0;
     } else {
         player.state = WALK;
-        player.frames = walkFrames;
+        player.frames = playerWalkFrames;
         player.numFrames = 5;
     }
 }
@@ -1290,8 +1358,8 @@ void updatePlayer() {
 void attack() {
     if (player.state == ATTACK || player.state == DODGE) return;
     player.state = ATTACK;
-    player.frames = attackFrames;
-    player.numFrames = 5;
+    player.frames = playerAttackFrames;
+    player.numFrames = 4;
     player.currentFrame = 0;
     player.timeUntilNextFrame = 5;
 
@@ -1303,52 +1371,125 @@ void attack() {
 }
 
 void updateEnemies() {
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 4; i++) {
         if (!enemies[i].active) continue;
         updateEnemy(&enemies[i]);
     }
 }
 
 void updateEnemy(Enemy* enemy) {
+    int enemyIndex = enemy - enemies;
+    enemy->vX = 0;
+    enemy->vY = 0;
+
+    if (enemy->animState == ATTACK) {
+        enemy->frames = enemyAttackFrames;
+        enemy->numFrames = 7;
+        if (!enemy->firedShot && enemy->currentFrame >= 3) {
+            spawnBullet(enemy->x, enemy->y, enemy->direction);
+            enemy->firedShot = 1;
+        }
+    } else {
+        int targetX = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][0];
+        int targetY = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][1];
+        int enemyX = ((enemy->x) >> 4);
+        int enemyY = ((enemy->y) >> 4);
+        int dX = targetX - enemyX;
+        int dY = targetY - enemyY;
+
+        if (abs(dX) <= 2 && abs(dY) <= 2) {
+            enemy->animState = ATTACK;
+            enemy->frames = enemyAttackFrames;
+            enemy->numFrames = 7;
+            enemy->currentFrame = 0;
+            enemy->timeUntilNextFrame = 5;
+            enemy->firedShot = 0;
+            enemy->patrolTargetIndex = (enemy->patrolTargetIndex + 1) % (sizeof(enemyPatrolPoints[enemyIndex]) / sizeof(enemyPatrolPoints[enemyIndex][0]));
+            dX = 0;
+            dY = 0;
+        } else {
+            if (abs(dX)) {
+                enemy->vX = (dX < 0) ? -6 : 6;
+                enemy->direction = (dX < 0) ? LEFT : RIGHT;
+            } else {
+                enemy->vY = (dY < 0) ? -6 : 6;
+                enemy->direction = (dY < 0) ? UP : DOWN;
+            }
+            enemy->animState = WALK;
+            enemy->frames = enemyWalkFrames;
+            enemy->numFrames = 5;
+        }
+    }
+
     enemy->timeUntilNextFrame--;
     if (enemy->timeUntilNextFrame <= 0) {
         enemy->timeUntilNextFrame = 5;
         enemy->currentFrame++;
 
         if (enemy->currentFrame >= enemy->numFrames) {
+            if (enemy->animState == ATTACK) {
+                enemy->animState = IDLE;
+                enemy->frames = enemyIdleFrames;
+                enemy->numFrames = 1;
+                enemy->firedShot = 0;
+            }
             enemy->currentFrame = 0;
         }
     }
 
-    enemy->vX = 0;
-    enemy->vY = 0;
+    enemy->x += enemy->vX;
+    enemy->y += enemy->vY;
+}
 
-    int playerX = ((player.x) >> 4);
-    int playerY = ((player.y) >> 4);
-    int enemyX = ((enemy->x) >> 4);
-    int enemyY = ((enemy->y) >> 4);
-    if (playerX < enemyX - 4) {
-        enemy->vX = -4;
-        enemy->direction = LEFT;
-    } else if (playerX > enemyX + 4) {
-        enemy->vX = 4;
-        enemy->direction = RIGHT;
+void spawnBullet(int x, int y, DIRECTION direction) {
+    for (int i = 0; i < 16; i++) {
+        if (!bullets[i].active) {
+            bullets[i].active = 1;
+            bullets[i].x = x + ((6) << 4);
+            bullets[i].y = y + ((6) << 4);
+            bullets[i].vX = 0;
+            bullets[i].vY = 0;
+            bullets[i].direction = direction;
+            bullets[i].lifetime = 180;
+
+            if (direction == LEFT) {
+                bullets[i].vX = -8;
+            } else if (direction == RIGHT) {
+                bullets[i].vX = 8;
+            } else if (direction == UP) {
+                bullets[i].vY = -8;
+            } else {
+                bullets[i].vY = 8;
+            }
+            return;
+        }
     }
-    if (playerY < enemyY - 4) {
-        enemy->vY = -4;
-        enemy->direction = UP;
-    } else if (playerY > enemyY + 4) {
-        enemy->vY = 4;
-        enemy->direction = DOWN;
-    }
+}
 
+void updateBullets() {
+    for (int i = 0; i < 16; i++) {
+        if (!bullets[i].active) continue;
 
-    if (enemy->vX != 0 && enemy->vY != 0) {
-        enemy->x += enemy->vX / 1.4;
-        enemy->y += enemy->vY / 1.4;
-    } else {
-        enemy->x += enemy->vX;
-        enemy->y += enemy->vY;
+        bullets[i].x += bullets[i].vX;
+        bullets[i].y += bullets[i].vY;
+        bullets[i].lifetime--;
+
+        int bulletLeft = ((bullets[i].x) >> 4) + bullets[i].hitboxOffX;
+        int bulletTop = ((bullets[i].y) >> 4) + bullets[i].hitboxOffY;
+        int bulletRight = bulletLeft + bullets[i].hitboxW - 1;
+        int bulletBottom = bulletTop + bullets[i].hitboxH - 1;
+
+        if (bullets[i].lifetime <= 0 || bulletLeft < 0 || bulletRight >= (512) || bulletTop < 0 || bulletBottom >= (512)) {
+            bullets[i].active = 0;
+            continue;
+        }
+
+        if (mapCollide(bulletLeft, bulletTop, (1 << 1)) ||
+            mapCollide(bulletRight, bulletTop, (1 << 1)) ||
+            mapCollide(bulletLeft, bulletBottom, (1 << 1)) ||
+            mapCollide(bulletRight, bulletBottom, (1 << 1))) {
+            bullets[i].active = 0;
+        }
     }
 }
 
@@ -1389,7 +1530,20 @@ void checkEntityCollisions() {
     int pRight = pLeft + player.hitboxW;
     int pBottom = pTop + player.hitboxH;
 
-    for (int i = 0; i < 1; i++) {
+    if (player.state != DODGE && player.state != HIT) {
+        for (int i = 0; i < 16; i++) {
+            if (!bullets[i].active) continue;
+            int bulletX = ((bullets[i].x) >> 4);
+            int bulletY = ((bullets[i].y) >> 4);
+            if (hitboxCollide(pLeft, pTop, player.hitboxW, player.hitboxH, bulletX + bullets[i].hitboxOffX, bulletY + bullets[i].hitboxOffY, bullets[i].hitboxW, bullets[i].hitboxH)) {
+                bullets[i].active = 0;
+                lives--;
+                mgba_printf("Player hit by bullet!");
+            }
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
         if (!enemies[i].active) continue;
         int enemyX = ((enemies[i].x) >> 4);
         int enemyY = ((enemies[i].y) >> 4);
@@ -1404,6 +1558,7 @@ void checkEntityCollisions() {
         }
 
 
+        if (player.state == DODGE || player.state == HIT) continue;
         if (pLeft < enemyX + enemies[i].hitboxOffX + enemies[i].hitboxW &&
             pRight > enemyX + enemies[i].hitboxOffX &&
             pTop < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
@@ -1415,20 +1570,22 @@ void checkEntityCollisions() {
 }
 
 void drawGame() {
+    drawHUD();
     drawPlayer();
     drawEnemies();
+    drawBullets();
 
     waitForVBlank();
     DMANow(3, shadowOAM, ((OBJ_ATTR*)(0x7000000)), 128*4);
 }
 
 void drawPlayer() {
-    shadowOAM[player.oamIndex].attr0 = ((player.y) >> 4) - vOff | (0<<13) | (0<<14);
-    shadowOAM[player.oamIndex].attr1 = ((player.x) >> 4) - hOff | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
+    shadowOAM[player.oamIndex].attr0 = ((((player.y) >> 4) - vOff) & 0xFF) | (0<<13) | (0<<14);
+    shadowOAM[player.oamIndex].attr1 = ((((player.x) >> 4) - hOff) & 0x1FF) | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
     if (player.direction == LEFT) {
-        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | ((((player.direction * 4) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
+        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | ((((player.direction * 4) * (32) + (player.frames[player.currentFrame]))) & 0x3FF) | (((2) & 3) << 10);
     } else {
-        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | (((((player.direction - 1) * 4) * (32) + (player.frames[player.currentFrame] * 2))) & 0x3FF);
+        shadowOAM[player.oamIndex].attr2 = (((0) & 0xF) <<12) | (((((player.direction - 1) * 4) * (32) + (player.frames[player.currentFrame]))) & 0x3FF) | (((2) & 3) << 10);
     }
 
     if (!sword.active) {
@@ -1441,42 +1598,69 @@ void drawPlayer() {
         case LEFT:
             swordX = ((player.x) >> 4) + swordOffsetSide[player.currentFrame][0];
             swordY = ((player.y) >> 4) + swordOffsetSide[player.currentFrame][1];
-            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame]))) & 0x3FF);
             break;
         case RIGHT:
             swordX = ((player.x) >> 4) - swordOffsetSide[player.currentFrame][0];
             swordY = ((player.y) >> 4) + swordOffsetSide[player.currentFrame][1];
-            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            frameTile = ((((LEFT * 2) * (32) + (sword.frames[player.currentFrame]))) & 0x3FF);
             break;
         case DOWN:
             swordX = ((player.x) >> 4) + swordOffsetDown[player.currentFrame][0];
             swordY = ((player.y) >> 4) + swordOffsetDown[player.currentFrame][1];
-            frameTile = ((((DOWN * 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            frameTile = ((((DOWN * 2) * (32) + (sword.frames[player.currentFrame]))) & 0x3FF);
             break;
         case UP:
             swordX = ((player.x) >> 4) + swordOffsetUp[player.currentFrame][0];
             swordY = ((player.y) >> 4) + swordOffsetUp[player.currentFrame][1];
-            frameTile = ((((UP * 2 + 2) * (32) + (sword.frames[player.currentFrame] * 2))) & 0x3FF);
+            frameTile = ((((UP * 2 + 2) * (32) + (sword.frames[player.currentFrame]))) & 0x3FF);
             break;
     }
 
-    shadowOAM[sword.oamIndex].attr0 = swordY - vOff | (0<<13) | (0<<14);
-    shadowOAM[sword.oamIndex].attr1 = swordX - hOff | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
-    shadowOAM[sword.oamIndex].attr2 = (((0) & 0xF) <<12) | frameTile;
+    shadowOAM[sword.oamIndex].attr0 = ((swordY - vOff) & 0xFF) | (0<<13) | (0<<14);
+    shadowOAM[sword.oamIndex].attr1 = ((swordX - hOff) & 0x1FF) | (1<<14) | (player.direction == RIGHT ? (1<<12) : 0);
+    shadowOAM[sword.oamIndex].attr2 = (((0) & 0xF) <<12) | frameTile | (((2) & 3) << 10);
 }
 
 void drawEnemies() {
-    for (int i = 0; i < 1; i++) {
-        if (!enemies[i].active) {
-            shadowOAM[enemies[i].oamIndex].attr0 = (2<<8);
+    for (int i = 0; i < 4; i++) {
+        Enemy* enemy = &enemies[i];
+        if (!enemy->active || clipSpritesOffScreen(enemy->oamIndex, ((enemy->x) >> 4) - hOff, ((enemy->y) >> 4) - vOff, 16, 16)) {
+            shadowOAM[enemy->oamIndex].attr0 = (2<<8);
             continue;
         }
-        shadowOAM[enemies[i].oamIndex].attr0 = ((enemies[i].y) >> 4) - vOff | (0<<13) | (0<<14);
-        shadowOAM[enemies[i].oamIndex].attr1 = ((enemies[i].x) >> 4) - hOff | (1<<14) | (enemies[i].direction == RIGHT ? (1<<12) : 0);
-        if (enemies[i].direction == LEFT) {
-            shadowOAM[enemies[i].oamIndex].attr2 = (((0) & 0xF) <<12) | ((((LEFT * 4) * (32) + (enemies[i].frames[enemies[i].currentFrame] * 2))) & 0x3FF);
+        shadowOAM[enemy->oamIndex].attr0 = ((((enemy->y) >> 4) - vOff) & 0xFF) | (0<<13) | (0<<14);
+        shadowOAM[enemy->oamIndex].attr1 = ((((enemy->x) >> 4) - hOff) & 0x1FF) | (1<<14) | (enemy->direction == RIGHT ? (1<<12) : 0);
+        if (enemy->direction == LEFT) {
+            shadowOAM[enemy->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((12) * (32) + (enemy->frames[enemy->currentFrame]))) & 0x3FF) | (((2) & 3) << 10);
         } else {
-            shadowOAM[enemies[i].oamIndex].attr2 = (((0) & 0xF) <<12) | (((((enemies[i].direction - 1) * 4) * (32) + (enemies[i].frames[enemies[i].currentFrame] * 2))) & 0x3FF);
+            shadowOAM[enemy->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((12 + (enemy->direction - 1) * 2) * (32) + (enemy->frames[enemy->currentFrame]))) & 0x3FF) | (((2) & 3) << 10);
         }
+    }
+}
+
+void drawBullets() {
+    for (int i = 0; i < 16; i++) {
+        Bullet* bullet = &bullets[i];
+        if (!bullet->active || clipSpritesOffScreen(bullet->oamIndex, ((bullet->x) >> 4) - hOff, ((bullet->y) >> 4) - vOff, 8, 8)) {
+            shadowOAM[bullet->oamIndex].attr0 = (2<<8);
+            continue;
+        }
+
+        shadowOAM[bullet->oamIndex].attr0 = ((((bullet->y) >> 4) - vOff) & 0xFF) | (0<<13) | (0<<14);
+        shadowOAM[bullet->oamIndex].attr1 = ((((bullet->x) >> 4) - hOff) & 0x1FF) | (0<<14) | (bullet->direction == RIGHT ? (1<<12) : 0);
+        if (bullet->direction == LEFT) {
+            shadowOAM[bullet->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((12 + (2 * bullet->direction)) * (32) + (26))) & 0x3FF) | (((2) & 3) << 10);
+        } else {
+            shadowOAM[bullet->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((12 + (2 * (bullet->direction - 1))) * (32) + (26))) & 0x3FF) | (((2) & 3) << 10);
+        }
+    }
+}
+
+void drawHUD() {
+    for (int i = 0; i < 3; i++) {
+        int tile = (i < lives) ? 352 : 352 + 1;
+        ((SB*) 0x6000000)[19].tilemap[1 * 32 + i + 1] =
+            (tile & 1023) | ((0 & 15) << 12);
     }
 }

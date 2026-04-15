@@ -304,18 +304,24 @@ extern const unsigned short spritesheetTiles[16384];
 extern const unsigned short spritesheetPal[256];
 # 6 "main.c" 2
 # 1 "game.h" 1
-# 11 "game.h"
+# 16 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
+typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
 
-static int idleFrames[] = {0};
-static int walkFrames[] = {1, 2, 3, 4, 5, 6};
-static int dodgeFrames[] = {7, 8, 9, 10, 11, 12};
-static int attackFrames[] = {32, 33, 34, 35, 36};
-static int swordFrames[] = {37, 38, 39, 40, 41};
+static int playerIdleFrames[] = {0};
+static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
+static int playerDodgeFrames[] = {14, 16, 18, 20, 22, 24};
+static int playerAttackFrames[] = {64, 66, 68, 70};
+static int swordFrames[] = {74, 76, 78, 80};
 static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
 static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
 static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
+static int enemyPatrolPoints[][4][2] = {{{176, 416}, {232, 416}, {232, 472}, {176, 472}}, {{348, 408}, {392, 408}, {392, 456}, {348, 456}},
+                                        {{384, 368}, {472, 368}, {472, 400}, {384, 400}}, {{184, 232}, {232, 232}, {232, 288}, {184, 288}}};
+static int enemyIdleFrames[] = {0};
+static int enemyWalkFrames[] = {2, 4, 6, 8, 10};
+static int enemyAttackFrames[] = {12, 14, 16, 18, 20, 22, 24};
 
 typedef struct {
     int x;
@@ -348,6 +354,29 @@ typedef struct {
     int numFrames;
     u8 oamIndex;
 } Sword;
+# 73 "game.h"
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int vX;
+    int vY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    ENEMY_STATE state;
+    int shotCooldown;
+    int timeUntilNextFrame;
+    DIRECTION direction;
+    int currentFrame;
+    int* frames;
+    int numFrames;
+    ANIMATION_STATE animState;
+    int patrolTargetIndex;
+    int firedShot;
+    u8 oamIndex;
+} Enemy;
 
 
 
@@ -362,22 +391,16 @@ typedef struct {
     int hitboxOffY;
     int hitboxW;
     int hitboxH;
-    int timeUntilNextFrame;
     DIRECTION direction;
-    int currentFrame;
-    int* frames;
-    int numFrames;
-    ANIMATION_STATE state;
+    int lifetime;
     u8 oamIndex;
-} Enemy;
-
-u8 colorAt(int x, int y);
-u8 mapCollide(int x, int y);
+} Bullet;
 
 void initGame();
 void initPlayer();
 void initSword();
 void initEnemies();
+void initBullets();
 
 void updateGame();
 void updateCamera();
@@ -385,16 +408,22 @@ void updatePlayer();
 void attack();
 void updateEnemies();
 void updateEnemy(Enemy* enemy);
+void updateBullets();
+void spawnBullet(int x, int y, DIRECTION direction);
 void checkEntityCollisions();
 
 void drawGame();
 void drawPlayer();
 void drawEnemies();
+void drawBullets();
+void drawHUD();
 
 extern Player player;
 extern Sword sword;
-extern Enemy enemies[1];
+extern Enemy enemies[4];
+extern Bullet bullets[16];
 extern int lives;
+extern int winFlag;
 # 7 "main.c" 2
 # 1 "tileset.h" 1
 # 21 "tileset.h"
@@ -403,7 +432,7 @@ extern const unsigned short tilesetTiles[16384];
 
 extern const unsigned short tilesetPal[256];
 # 8 "main.c" 2
-# 1 "testmap.h" 1
+# 1 "level1Map.h" 1
 
 
 
@@ -411,15 +440,10 @@ extern const unsigned short tilesetPal[256];
 
 
 
-extern const unsigned short testmapLayer0Map[1024];
-extern const unsigned short testmapLayer1Map[1024];
-extern const unsigned short testmapLayer2Map[1024];
-
-
-extern const unsigned short testmapcmBitmap[32768];
-
-
-extern const unsigned short testmapcmPal[256];
+extern const unsigned short level1MapLayer0Map[4096];
+extern const unsigned short level1MapLayer1Map[4096];
+extern const unsigned short level1MapLayer2Map[4096];
+extern const unsigned short level1MapLayer3Map[4096];
 # 9 "main.c" 2
 # 1 "mode4.h" 1
 # 9 "mode4.h"
@@ -430,6 +454,68 @@ void fillScreen4(volatile unsigned char colorIndex);
 void drawImage4(int x, int y, int width, int height, const unsigned short *image);
 void drawFullscreenImage4(const unsigned short *image);
 # 10 "main.c" 2
+# 1 "startMenu.h" 1
+
+
+
+
+
+
+
+extern const unsigned short startMenuLayer0Map[1024];
+extern const unsigned short startMenuLayer1Map[1024];
+extern const unsigned short startMenuLayer2Map[1024];
+# 11 "main.c" 2
+# 1 "pauseMenu.h" 1
+
+
+
+
+
+
+
+extern const unsigned short pauseMenuLayer0Map[1024];
+extern const unsigned short pauseMenuLayer1Map[1024];
+extern const unsigned short pauseMenuLayer2Map[1024];
+# 12 "main.c" 2
+# 1 "winMenu.h" 1
+
+
+
+
+
+
+
+extern const unsigned short winMenuLayer0Map[1024];
+extern const unsigned short winMenuLayer1Map[1024];
+extern const unsigned short winMenuLayer2Map[1024];
+# 13 "main.c" 2
+# 1 "loseMenu.h" 1
+
+
+
+
+
+
+
+extern const unsigned short loseMenuLayer0Map[1024];
+extern const unsigned short loseMenuLayer1Map[1024];
+extern const unsigned short loseMenuLayer2Map[1024];
+# 14 "main.c" 2
+# 1 "utils.h" 1
+
+
+
+
+
+
+int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
+void clearBackground(int screenblock, u16 tileEntry);
+u8 colorAt(int x, int y);
+u8 mapCollide(int x, int y, u32 colorMask);
+u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
+void resetOff();
+# 15 "main.c" 2
 
 void initialize();
 void goToStart();
@@ -501,17 +587,30 @@ void initialize() {
 }
 
 void goToStart() {
-    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
-    fillScreen4(5);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+
+    DMANow(3, startMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
+    DMANow(3, startMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, startMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    resetOff();
     state = START;
 }
 
 void start() {
-    mgba_printf("In start screen...");
     if ((!(~(oldButtons) & ((1<<2))) && (~(buttons) & ((1<<2))))) {
         goToInstructions();
     }
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
+        winFlag = 0;
+        lives = 3;
         goToGame();
     }
 }
@@ -535,20 +634,20 @@ void instructions() {
 void goToGame() {
     mgba_printf("Entering game...");
 
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
     hideSprites();
-    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((31) << 8) | (0 << 7);
-    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((30) << 8) | (0 << 7);
-    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((29) << 8) | (0 << 7);
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((0) << 2) | ((19) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x400000A) = (3 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (3 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (3 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
     DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
     DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
 
-    DMANow(3, testmapLayer0Map, &((SB*) 0x6000000)[29], sizeof(testmapLayer0Map) / 2);
-    DMANow(3, testmapLayer1Map, &((SB*) 0x6000000)[30], sizeof(testmapLayer1Map) / 2);
-    DMANow(3, testmapLayer2Map, &((SB*) 0x6000000)[31], sizeof(testmapLayer2Map) / 2);
+    DMANow(3, level1MapLayer2Map, &((SB*) 0x6000000)[20], (8192) / 2);
+    DMANow(3, level1MapLayer1Map, &((SB*) 0x6000000)[24], (8192) / 2);
+    DMANow(3, level1MapLayer0Map, &((SB*) 0x6000000)[28], (8192) / 2);
 
-    lives = 1;
     state = GAME;
     initGame();
 }
@@ -558,22 +657,37 @@ void game() {
 
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToPause();
+        return;
+    }
+
+    if (winFlag) {
+        goToWin();
+        return;
     }
 
     if (lives <= 0) {
         goToLose();
-    }
-    for (int i = 0; i < 1; i++) {
-        if (enemies[i].active) break;
-        goToWin();
+        return;
     }
 
     drawGame();
 }
 
 void goToPause() {
-    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
-    fillScreen4(1);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+
+    DMANow(3, pauseMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
+    DMANow(3, pauseMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, pauseMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    resetOff();
     state = PAUSE;
 }
 
@@ -587,8 +701,20 @@ void pause() {
 }
 
 void goToWin() {
-    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
-    fillScreen4(2);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+
+    DMANow(3, winMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
+    DMANow(3, winMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, winMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    resetOff();
     state = WIN;
 }
 
@@ -599,8 +725,20 @@ void win() {
 }
 
 void goToLose() {
-    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
-    fillScreen4(3);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+
+    DMANow(3, loseMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
+    DMANow(3, loseMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, loseMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    resetOff();
     state = LOSE;
 }
 
