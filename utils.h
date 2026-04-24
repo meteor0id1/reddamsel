@@ -4,6 +4,7 @@
 #define TO_FIXED(n) ((n) << FIX_SHIFT)
 #define FROM_FIXED(n) ((n) >> FIX_SHIFT)            
 
+void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
 u8 colorAt(int x, int y);

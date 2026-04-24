@@ -60,6 +60,7 @@ typedef struct {
 
 
 
+void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
 u8 colorAt(int x, int y);
@@ -122,6 +123,12 @@ typedef struct {
 const unsigned short* currentCollisionMap = level1CMBitmap;
 static int collisionMapWidth = 256;
 static int collisionMapHeight = 256;
+
+void setScreenblockPalette(int screenblock, int palRow) {
+    for (int i = 0; i < 1024; i++) {
+        ((SB*) 0x6000000)[screenblock].tilemap[i] = (((SB*) 0x6000000)[screenblock].tilemap[i] & ~((0 & 15) << 12)) | ((palRow & 15) << 12);
+    }
+}
 
 void clearBackground(int screenblock, u16 tileEntry) {
     for (int i = 0; i < 32 * 32; i++) {

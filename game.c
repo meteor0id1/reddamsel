@@ -7,6 +7,7 @@
 #include "level1Map.h"
 #include "utils.h"
 #include "level1CM.h"
+#include "analogSound.h"
 
 Player player;
 Sword sword;
@@ -15,12 +16,15 @@ Bullet bullets[MAX_BULLETS];
 int lives;
 int winFlag;
 int hOff, vOff;
+int waterColor;
 
 void initGame() {
     initPlayer();
     initSword();
     initEnemies();
     initBullets();
+
+    waterColor = 0;
 }
 
 void initPlayer() {
@@ -101,6 +105,12 @@ void updateGame() {
     updateBullets();
     updateCamera();
     checkEntityCollisions();
+    updateEnvironment();
+}
+
+void updateEnvironment() {
+    BG_PALETTE[11] = waterColorUpdate[(waterColor / 16) % 8];
+    waterColor++;
 }
 
 void updateCamera() {
@@ -142,7 +152,7 @@ void updateCamera() {
 void updatePlayer() {    
     player.timeUntilNextFrame--;
     if (player.timeUntilNextFrame <= 0) {
-        player.timeUntilNextFrame = (player.state == ATTACK) ? FRAME_DURATION : FRAME_DURATION + 1;
+        player.timeUntilNextFrame = FRAME_DURATION;
         player.currentFrame++;
 
         if (player.currentFrame >= player.numFrames) {
@@ -425,6 +435,7 @@ void checkEntityCollisions() {
             if (hitboxCollide(pLeft, pTop, player.hitboxW, player.hitboxH, bulletX + bullets[i].hitboxOffX, bulletY + bullets[i].hitboxOffY, bullets[i].hitboxW, bullets[i].hitboxH)) {
                 bullets[i].active = 0;
                 lives--;
+                playAnalogSound(15);
                 mgba_printf("Player hit by bullet!");
             }
         }
@@ -440,6 +451,7 @@ void checkEntityCollisions() {
             swordHitboxY < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
             swordHitboxY + swordHitboxH > enemyY + enemies[i].hitboxOffY && sword.active) {
             mgba_printf("Enemy hit!");
+            playAnalogSound(4);
             enemies[i].active = 0;
             return;
         }
@@ -451,6 +463,7 @@ void checkEntityCollisions() {
             pTop < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
             pBottom > enemyY + enemies[i].hitboxOffY) {
             mgba_printf("Player hit!");
+            playAnalogSound(15);
             lives--;
         }
     }

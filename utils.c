@@ -7,6 +7,12 @@ const unsigned short* currentCollisionMap = level1CMBitmap;
 static int collisionMapWidth = 256;
 static int collisionMapHeight = 256;
 
+void setScreenblockPalette(int screenblock, int palRow) {
+    for (int i = 0; i < 1024; i++) {
+        SCREENBLOCK[screenblock].tilemap[i] = (SCREENBLOCK[screenblock].tilemap[i] & ~TILEMAP_ENTRY_PALROW(0)) | TILEMAP_ENTRY_PALROW(palRow);
+    }
+}
+
 void clearBackground(int screenblock, u16 tileEntry) {
     for (int i = 0; i < 32 * 32; i++) {
         SCREENBLOCK[screenblock].tilemap[i] = tileEntry;

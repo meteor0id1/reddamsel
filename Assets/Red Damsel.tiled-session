@@ -18,12 +18,28 @@
             "scaleInDock": 3.7534,
             "scaleInEditor": 6.22
         },
+        "instructionsScreen.tmx": {
+            "scale": 3,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 159.83333333333331,
+                "y": 125.5
+            }
+        },
         "level1Map.tmx": {
             "scale": 3,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 242.33333333333334,
-                "y": 298
+                "x": 302.16666666666663,
+                "y": 342.8333333333333
+            }
+        },
+        "startScreen.tmx": {
+            "scale": 3,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 99.16666666666666,
+                "y": 128.5
             }
         }
     },

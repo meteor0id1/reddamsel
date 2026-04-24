@@ -296,18 +296,13 @@ void mgba_printf(const char* string, ...);
 void mgba_break(void);
 void mgba_close(void);
 # 5 "main.c" 2
-# 1 "spritesheet.h" 1
-# 21 "spritesheet.h"
-extern const unsigned short spritesheetTiles[16384];
-
-
-extern const unsigned short spritesheetPal[256];
-# 6 "main.c" 2
 # 1 "game.h" 1
 # 16 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
+
+static int waterColorUpdate[] = {0x63FF, 0x63FF, 0x63FF, 0x5F51, 0x4AAA, 0x4AAA, 0x4AAA, 0x5F51};
 
 static int playerIdleFrames[] = {0};
 static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
@@ -354,7 +349,7 @@ typedef struct {
     int numFrames;
     u8 oamIndex;
 } Sword;
-# 73 "game.h"
+# 75 "game.h"
 typedef struct {
     int active;
     int x;
@@ -403,6 +398,7 @@ void initEnemies();
 void initBullets();
 
 void updateGame();
+void updateEnvironment();
 void updateCamera();
 void updatePlayer();
 void attack();
@@ -424,14 +420,168 @@ extern Enemy enemies[4];
 extern Bullet bullets[16];
 extern int lives;
 extern int winFlag;
+# 6 "main.c" 2
+# 1 "mode4.h" 1
+# 9 "mode4.h"
+void flipPages();
+void setPixel4(int x, int y, unsigned char colorIndex);
+void drawRect4(int x, int y, int width, int height, volatile unsigned char colorIndex);
+void fillScreen4(volatile unsigned char colorIndex);
+void drawImage4(int x, int y, int width, int height, const unsigned short *image);
+void drawFullscreenImage4(const unsigned short *image);
 # 7 "main.c" 2
+# 1 "utils.h" 1
+
+
+
+
+
+
+void setScreenblockPalette(int screenblock, int palRow);
+int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
+void clearBackground(int screenblock, u16 tileEntry);
+u8 colorAt(int x, int y);
+u8 mapCollide(int x, int y, u32 colorMask);
+u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
+void resetOff();
+# 8 "main.c" 2
+# 1 "analogSound.h" 1
+# 257 "analogSound.h"
+extern enum note {
+
+  REST = 0,
+  NOTE_C2 =44,
+  NOTE_CS2 =157,
+  NOTE_D2 =263,
+  NOTE_DS2 =363,
+  NOTE_E2 =457,
+  NOTE_F2 =547,
+  NOTE_FS2 =631,
+  NOTE_G2 =711,
+  NOTE_GS2 =786,
+  NOTE_A2 =856,
+  NOTE_AS2 =923,
+  NOTE_B2 =986,
+  NOTE_C3 =1046,
+  NOTE_CS3 =1102,
+  NOTE_D3 =1155,
+  NOTE_DS3 =1205,
+  NOTE_E3 =1253,
+  NOTE_F3 =1297,
+  NOTE_FS3 =1339,
+  NOTE_G3 =1379,
+  NOTE_GS3 =1417,
+  NOTE_A3 =1452,
+  NOTE_AS3 =1486,
+  NOTE_B3 =1517,
+  NOTE_C4 =1547,
+  NOTE_CS4 =1575,
+  NOTE_D4 =1602,
+  NOTE_DS4 =1627,
+  NOTE_E4 =1650,
+  NOTE_F4 =1673,
+  NOTE_FS4 =1694,
+  NOTE_G4 =1714,
+  NOTE_GS4 =1732,
+  NOTE_A4 =1750,
+  NOTE_AS4 =1767,
+  NOTE_B4 =1783,
+  NOTE_C5 =1798,
+  NOTE_CS5 =1812,
+  NOTE_D5 =1825,
+  NOTE_DS5 =1837,
+  NOTE_E5 =1849,
+  NOTE_F5 =1860,
+  NOTE_FS5 =1871,
+  NOTE_G5 =1881,
+  NOTE_GS5 =1890,
+  NOTE_A5 =1899,
+  NOTE_AS5 =1907,
+  NOTE_B5 =1915,
+  NOTE_C6 =1923,
+  NOTE_CS6 =1930,
+  NOTE_D6 =1936,
+  NOTE_DS6 =1943,
+  NOTE_E6 =1949,
+  NOTE_F6 =1954,
+  NOTE_FS6 =1959,
+  NOTE_G6 =1964,
+  NOTE_GS6 =1969,
+  NOTE_A6 =1974,
+  NOTE_AS6 =1978,
+  NOTE_B6 =1982,
+  NOTE_C7 =1985,
+  NOTE_CS7 =1989,
+  NOTE_D7 =1992,
+  NOTE_DS7 =1995,
+  NOTE_E7 =1998,
+  NOTE_F7 =2001,
+  NOTE_FS7 =2004,
+  NOTE_G7 =2006,
+  NOTE_GS7 =2009,
+  NOTE_A7 =2011,
+  NOTE_AS7 =2013,
+  NOTE_B7 =2015,
+  NOTE_C8 =2017
+} NOTES;
+
+typedef struct noteWithDuration {
+  enum note note;
+  unsigned char duration;
+} NoteWithDuration;
+
+void initSound();
+void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime);
+void playNoteWithDuration(NoteWithDuration *n, unsigned char duty);
+void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty);
+void playAnalogSound(unsigned short sound);
+# 9 "main.c" 2
+# 1 "digitalSound.h" 1
+
+
+
+void setupSounds();
+void playSoundA(const signed char* sound, int length, int loops);
+void playSoundB(const signed char* sound, int length, int loops);
+
+void pauseSounds();
+void unpauseSounds();
+void stopSounds();
+# 49 "digitalSound.h"
+typedef struct{
+    const signed char* data;
+    int dataLength;
+    int isPlaying;
+    int looping;
+    int durationInVBlanks;
+    int vBlankCount;
+} SOUND;
+
+extern SOUND soundA;
+extern SOUND soundB;
+# 10 "main.c" 2
+
+# 1 "UItileset.h" 1
+# 21 "UItileset.h"
+extern const unsigned short UItilesetTiles[8192];
+
+
+extern const unsigned short UItilesetPal[256];
+# 12 "main.c" 2
 # 1 "tileset.h" 1
 # 21 "tileset.h"
-extern const unsigned short tilesetTiles[16384];
+extern const unsigned short tilesetTiles[8192];
 
 
 extern const unsigned short tilesetPal[256];
-# 8 "main.c" 2
+# 13 "main.c" 2
+# 1 "spritesheet.h" 1
+# 21 "spritesheet.h"
+extern const unsigned short spritesheetTiles[16384];
+
+
+extern const unsigned short spritesheetPal[256];
+# 14 "main.c" 2
 # 1 "level1Map.h" 1
 
 
@@ -444,17 +594,8 @@ extern const unsigned short level1MapLayer0Map[4096];
 extern const unsigned short level1MapLayer1Map[4096];
 extern const unsigned short level1MapLayer2Map[4096];
 extern const unsigned short level1MapLayer3Map[4096];
-# 9 "main.c" 2
-# 1 "mode4.h" 1
-# 9 "mode4.h"
-void flipPages();
-void setPixel4(int x, int y, unsigned char colorIndex);
-void drawRect4(int x, int y, int width, int height, volatile unsigned char colorIndex);
-void fillScreen4(volatile unsigned char colorIndex);
-void drawImage4(int x, int y, int width, int height, const unsigned short *image);
-void drawFullscreenImage4(const unsigned short *image);
-# 10 "main.c" 2
-# 1 "startMenu.h" 1
+# 15 "main.c" 2
+# 1 "startScreen.h" 1
 
 
 
@@ -462,10 +603,10 @@ void drawFullscreenImage4(const unsigned short *image);
 
 
 
-extern const unsigned short startMenuLayer0Map[1024];
-extern const unsigned short startMenuLayer1Map[1024];
-extern const unsigned short startMenuLayer2Map[1024];
-# 11 "main.c" 2
+extern const unsigned short startScreenLayer0Map[2048];
+extern const unsigned short startScreenLayer1Map[2048];
+extern const unsigned short startScreenLayer2Map[2048];
+# 16 "main.c" 2
 # 1 "pauseMenu.h" 1
 
 
@@ -477,7 +618,7 @@ extern const unsigned short startMenuLayer2Map[1024];
 extern const unsigned short pauseMenuLayer0Map[1024];
 extern const unsigned short pauseMenuLayer1Map[1024];
 extern const unsigned short pauseMenuLayer2Map[1024];
-# 12 "main.c" 2
+# 17 "main.c" 2
 # 1 "winMenu.h" 1
 
 
@@ -489,7 +630,7 @@ extern const unsigned short pauseMenuLayer2Map[1024];
 extern const unsigned short winMenuLayer0Map[1024];
 extern const unsigned short winMenuLayer1Map[1024];
 extern const unsigned short winMenuLayer2Map[1024];
-# 13 "main.c" 2
+# 18 "main.c" 2
 # 1 "loseMenu.h" 1
 
 
@@ -501,28 +642,26 @@ extern const unsigned short winMenuLayer2Map[1024];
 extern const unsigned short loseMenuLayer0Map[1024];
 extern const unsigned short loseMenuLayer1Map[1024];
 extern const unsigned short loseMenuLayer2Map[1024];
-# 14 "main.c" 2
-# 1 "utils.h" 1
+# 19 "main.c" 2
+# 1 "bgMusic.h" 1
 
 
-
-
-
-
-int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
-void clearBackground(int screenblock, u16 tileEntry);
-u8 colorAt(int x, int y);
-u8 mapCollide(int x, int y, u32 colorMask);
-u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
-void resetOff();
-# 15 "main.c" 2
+extern const unsigned int bgMusic_sampleRate;
+extern const unsigned int bgMusic_length;
+extern const signed char bgMusic_data[];
+# 20 "main.c" 2
 
 void initialize();
+
+void setupInterrupts();
+void interruptHandler();
+
 void goToStart();
 void start();
 void goToInstructions();
 void instructions();
 void goToGame();
+void resumeGame();
 void game();
 void goToPause();
 void pause();
@@ -544,6 +683,8 @@ enum State {
 };
 
 int state;
+int bg2hOff;
+int bg3hOff;
 
 int main() {
     initialize();
@@ -581,24 +722,63 @@ int main() {
 
 void initialize() {
     mgba_open();
+    initSound();
+    setupSounds();
+    setupInterrupts();
+    playSoundA(bgMusic_data, bgMusic_length, 1);
+
     DMANow(3, tilesetPal, ((unsigned short *)0x5000000), 256);
     DMANow(3, spritesheetPal, ((u16 *)0x5000200), 256);
-    goToStart();
-}
-
-void goToStart() {
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
-    hideSprites();
-    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
-    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
-    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
     DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
     DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+    DMANow(3, UItilesetTiles, ((CB*) 0x6000000) + 1, sizeof(UItilesetTiles) / 2);
 
-    DMANow(3, startMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
-    DMANow(3, startMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
-    DMANow(3, startMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+    bg2hOff = 0;
+    bg3hOff = 0;
+
+    goToStart();
+}
+
+void setupInterrupts() {
+    *(unsigned short*)0x4000208 = 0;
+    *(unsigned short*)0x4000200 = (1 << 0);
+    *(unsigned short*)0x4000004 = (1 << 3);
+    *((ihp*)0x03007FFC) = &interruptHandler;
+ *(unsigned short*)0x4000208 = 1;
+}
+
+void interruptHandler() {
+ *(unsigned short*)0x4000208 = 0;
+ if (*(volatile unsigned short*)0x4000202 & (1 << 0)) {
+        if (soundA.isPlaying) {
+            soundA.vBlankCount++;
+            if (soundA.vBlankCount >= soundA.durationInVBlanks) {
+                playSoundA(bgMusic_data, bgMusic_length, 1);
+            }
+        }
+ }
+
+    *(volatile unsigned short*)0x4000202 = *(volatile unsigned short*)0x4000202;
+    *(unsigned short*)0x4000208 = 1;
+}
+
+void goToStart() {
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x400000C) = (1 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (1 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, startScreenLayer2Map, &((SB*) 0x6000000)[16], 1024);
+    DMANow(3, startScreenLayer1Map, &((SB*) 0x6000000)[24], (4096) / 2);
+    DMANow(3, startScreenLayer0Map, &((SB*) 0x6000000)[28], (4096) / 2);
+
+    setScreenblockPalette(16, 2);
+    setScreenblockPalette(28, 1);
+    setScreenblockPalette(29, 1);
+
+    ((unsigned short *)0x5000000)[0] = 0x4AAA;
 
     resetOff();
     state = START;
@@ -613,11 +793,16 @@ void start() {
         lives = 3;
         goToGame();
     }
+    bg2hOff += 12;
+    bg3hOff += 6;
+
+    waitForVBlank();
+    (*(volatile unsigned short*) 0x04000018) = ((bg2hOff) >> 4);
+    (*(volatile unsigned short*) 0x0400001C) = ((bg3hOff) >> 4);
 }
 
 void goToInstructions() {
-    (*(volatile unsigned short *)0x4000000) = ((4) & 7) | (1 << (8 + (2 % 4)));
-    fillScreen4(4);
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (3 % 4)));
     state = INSTRUCTIONS;
 }
 
@@ -636,14 +821,16 @@ void goToGame() {
 
     (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
     hideSprites();
-    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((0) << 2) | ((19) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
     (*(volatile unsigned short*) 0x400000A) = (3 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
     (*(volatile unsigned short*) 0x400000C) = (3 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
     (*(volatile unsigned short*) 0x400000E) = (3 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
     DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, UItilesetTiles, ((CB*) 0x6000000) + 1, sizeof(UItilesetTiles) / 2);
     DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
 
+    DMANow(3, 0, &((SB*) 0x6000000)[16], 1024);
     DMANow(3, level1MapLayer2Map, &((SB*) 0x6000000)[20], (8192) / 2);
     DMANow(3, level1MapLayer1Map, &((SB*) 0x6000000)[24], (8192) / 2);
     DMANow(3, level1MapLayer0Map, &((SB*) 0x6000000)[28], (8192) / 2);
@@ -651,6 +838,7 @@ void goToGame() {
     state = GAME;
     initGame();
 }
+
 
 void game() {
     updateGame();
@@ -671,6 +859,22 @@ void game() {
     }
 
     drawGame();
+}
+
+void resumeGame() {
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((19) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x400000A) = (3 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x400000C) = (3 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x400000E) = (3 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
+    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+
+    DMANow(3, level1MapLayer2Map, &((SB*) 0x6000000)[20], (8192) / 2);
+    DMANow(3, level1MapLayer1Map, &((SB*) 0x6000000)[24], (8192) / 2);
+    DMANow(3, level1MapLayer0Map, &((SB*) 0x6000000)[28], (8192) / 2);
+    state = GAME;
 }
 
 void goToPause() {
@@ -696,7 +900,7 @@ void pause() {
         goToStart();
     }
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
-        goToGame();
+        resumeGame();
     }
 }
 

@@ -3,19 +3,21 @@
 #include "sprites.h"
 
 #define BLANK_TILE 0
-#define HUD_SCREENBLOCK 19
-#define HUD_PALROW 0
-#define HUD_LIFE_TILE 352
+#define HUD_SCREENBLOCK 16
+#define HUD_PALROW 2
+#define HUD_LIFE_TILE 1
 
 #define PLAYER_SPEED 10
 #define MAX_LIVES 3
-#define FRAME_DURATION 5
+#define FRAME_DURATION 6
 #define PLAYER_COLLISION_MASK ((1 << 1) | (1 << 3))
 #define BULLET_COLLISION_MASK (1 << 1)
 
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
+
+static int waterColorUpdate[] = {0x63FF, 0x63FF, 0x63FF, 0x5F51, 0x4AAA, 0x4AAA, 0x4AAA, 0x5F51};
 
 static int playerIdleFrames[] = {0};
 static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
@@ -118,6 +120,7 @@ void initEnemies();
 void initBullets();
 
 void updateGame();
+void updateEnvironment();
 void updateCamera();
 void updatePlayer();
 void attack();
