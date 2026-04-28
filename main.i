@@ -297,7 +297,7 @@ void mgba_break(void);
 void mgba_close(void);
 # 5 "main.c" 2
 # 1 "game.h" 1
-# 16 "game.h"
+# 18 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
@@ -308,15 +308,21 @@ static int playerIdleFrames[] = {0};
 static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
 static int playerDodgeFrames[] = {14, 16, 18, 20, 22, 24};
 static int playerAttackFrames[] = {64, 66, 68, 70};
+static int playerHitFrames[] = {26, 0, 26};
 static int swordFrames[] = {74, 76, 78, 80};
 static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
 static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
 static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
-static int enemyPatrolPoints[][4][2] = {{{176, 416}, {232, 416}, {232, 472}, {176, 472}}, {{348, 408}, {392, 408}, {392, 456}, {348, 456}},
-                                        {{384, 368}, {472, 368}, {472, 400}, {384, 400}}, {{184, 232}, {232, 232}, {232, 288}, {184, 288}}};
+static int enemyPatrolPoints[][4][2] = {{{200, 424}, {272, 424}, {272, 460}, {200, 460}}, {{368, 416}, {424, 416}, {424, 440}, {368, 440}},
+                                        {{456, 352}, {392, 352}, {392, 384}, {456, 384}}, {{360, 320}, {424, 320}, {424, 272}, {360, 272}},
+                                        {{296, 264}, {296, 304}, {360, 304}, {360, 264}}, {{192, 240}, {232, 240}, {232, 304}, {192, 304}},
+                                        {{128, 224}, {128, 264}, {168, 264}, {168, 224}}, {{56, 200}, {136, 200}, {56, 200}, {136, 200}},
+                                        {{72, 96}, {72, 128}, {128, 128}, {128, 96}}, {{168, 112}, {120, 112}, {120, 72}, {168, 72}},
+                                        {{216, 40}, {216, 72}, {176, 72}, {176, 40}}};
 static int enemyIdleFrames[] = {0};
 static int enemyWalkFrames[] = {2, 4, 6, 8, 10};
 static int enemyAttackFrames[] = {12, 14, 16, 18, 20, 22, 24};
+static int korokFrames[] = {576, 578, 580, 582};
 
 typedef struct {
     int x;
@@ -349,7 +355,7 @@ typedef struct {
     int numFrames;
     u8 oamIndex;
 } Sword;
-# 75 "game.h"
+# 83 "game.h"
 typedef struct {
     int active;
     int x;
@@ -391,35 +397,93 @@ typedef struct {
     u8 oamIndex;
 } Bullet;
 
+
+
+
+
+
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int vX;
+    int vY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    DIRECTION direction;
+    int lifetime;
+    u8 oamIndex;
+} Slash;
+
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int promptVisible;
+    int timeUntilNextFrame;
+    int currentFrame;
+    int* frames;
+    int numFrames;
+    u8 oamIndex;
+} Korok;
+
+
+
+
+
+
+
+typedef struct {
+    int tileX;
+    int tileY;
+    int cut;
+} Bush;
+
 void initGame();
 void initPlayer();
 void initSword();
+void initSlashes();
 void initEnemies();
 void initBullets();
+void initKorok();
+void initBushes();
 
 void updateGame();
 void updateEnvironment();
 void updateCamera();
+void setPlayerMovementFromInputs();
+void moveAndCollidePlayer();
 void updatePlayer();
 void attack();
+void updateSlashes();
 void updateEnemies();
 void updateEnemy(Enemy* enemy);
 void updateBullets();
 void spawnBullet(int x, int y, DIRECTION direction);
+int checkBushCollision(int x, int y);
+int checkHitboxCollision(int left, int top, int right, int bottom, u32 colorMask);
 void checkEntityCollisions();
+void updateKorok();
 
 void drawGame();
 void drawPlayer();
+void drawSlashes();
 void drawEnemies();
 void drawBullets();
+void drawKorok();
 void drawHUD();
 
 extern Player player;
 extern Sword sword;
-extern Enemy enemies[4];
+extern Enemy enemies[11];
 extern Bullet bullets[16];
+extern Korok korok;
+extern Slash slashes[3];
 extern int lives;
 extern int winFlag;
+extern int cheatFlag;
 # 6 "main.c" 2
 # 1 "mode4.h" 1
 # 9 "mode4.h"
@@ -440,6 +504,9 @@ void drawFullscreenImage4(const unsigned short *image);
 void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
+
+void setMapTile(int screenblock, int x, int y, u16 tileId);
+
 u8 colorAt(int x, int y);
 u8 mapCollide(int x, int y, u32 colorMask);
 u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
@@ -530,11 +597,13 @@ typedef struct noteWithDuration {
   unsigned char duration;
 } NoteWithDuration;
 
+typedef enum {DASH, SWING, OUCH, KILL, BUSH, POWERUP, VICTORY, DEATH} SOUND_FX;
+
 void initSound();
 void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime);
 void playNoteWithDuration(NoteWithDuration *n, unsigned char duty);
 void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty);
-void playAnalogSound(unsigned short sound);
+void playAnalogSound(SOUND_FX sound);
 # 9 "main.c" 2
 # 1 "digitalSound.h" 1
 
@@ -561,27 +630,28 @@ extern SOUND soundA;
 extern SOUND soundB;
 # 10 "main.c" 2
 
+
 # 1 "UItileset.h" 1
 # 21 "UItileset.h"
 extern const unsigned short UItilesetTiles[8192];
 
 
 extern const unsigned short UItilesetPal[256];
-# 12 "main.c" 2
+# 13 "main.c" 2
 # 1 "tileset.h" 1
 # 21 "tileset.h"
 extern const unsigned short tilesetTiles[8192];
 
 
 extern const unsigned short tilesetPal[256];
-# 13 "main.c" 2
+# 14 "main.c" 2
 # 1 "spritesheet.h" 1
 # 21 "spritesheet.h"
 extern const unsigned short spritesheetTiles[16384];
 
 
 extern const unsigned short spritesheetPal[256];
-# 14 "main.c" 2
+# 15 "main.c" 2
 # 1 "level1Map.h" 1
 
 
@@ -593,8 +663,7 @@ extern const unsigned short spritesheetPal[256];
 extern const unsigned short level1MapLayer0Map[4096];
 extern const unsigned short level1MapLayer1Map[4096];
 extern const unsigned short level1MapLayer2Map[4096];
-extern const unsigned short level1MapLayer3Map[4096];
-# 15 "main.c" 2
+# 16 "main.c" 2
 # 1 "startScreen.h" 1
 
 
@@ -606,7 +675,18 @@ extern const unsigned short level1MapLayer3Map[4096];
 extern const unsigned short startScreenLayer0Map[2048];
 extern const unsigned short startScreenLayer1Map[2048];
 extern const unsigned short startScreenLayer2Map[2048];
-# 16 "main.c" 2
+# 17 "main.c" 2
+# 1 "instructionsScreen.h" 1
+
+
+
+
+
+
+
+extern const unsigned short instructionsScreenLayer0Map[1024];
+extern const unsigned short instructionsScreenLayer1Map[1024];
+# 18 "main.c" 2
 # 1 "pauseMenu.h" 1
 
 
@@ -617,39 +697,37 @@ extern const unsigned short startScreenLayer2Map[2048];
 
 extern const unsigned short pauseMenuLayer0Map[1024];
 extern const unsigned short pauseMenuLayer1Map[1024];
-extern const unsigned short pauseMenuLayer2Map[1024];
-# 17 "main.c" 2
-# 1 "winMenu.h" 1
-
-
-
-
-
-
-
-extern const unsigned short winMenuLayer0Map[1024];
-extern const unsigned short winMenuLayer1Map[1024];
-extern const unsigned short winMenuLayer2Map[1024];
-# 18 "main.c" 2
-# 1 "loseMenu.h" 1
-
-
-
-
-
-
-
-extern const unsigned short loseMenuLayer0Map[1024];
-extern const unsigned short loseMenuLayer1Map[1024];
-extern const unsigned short loseMenuLayer2Map[1024];
 # 19 "main.c" 2
+# 1 "winScreen.h" 1
+
+
+
+
+
+
+
+extern const unsigned short winScreenLayer0Map[1024];
+extern const unsigned short winScreenLayer1Map[1024];
+extern const unsigned short winScreenLayer2Map[1024];
+# 20 "main.c" 2
+# 1 "loseScreen.h" 1
+
+
+
+
+
+
+
+extern const unsigned short loseScreenLayer0Map[1024];
+extern const unsigned short loseScreenLayer1Map[1024];
+# 21 "main.c" 2
 # 1 "bgMusic.h" 1
 
 
 extern const unsigned int bgMusic_sampleRate;
 extern const unsigned int bgMusic_length;
 extern const signed char bgMusic_data[];
-# 20 "main.c" 2
+# 22 "main.c" 2
 
 void initialize();
 
@@ -727,7 +805,8 @@ void initialize() {
     setupInterrupts();
     playSoundA(bgMusic_data, bgMusic_length, 1);
 
-    DMANow(3, tilesetPal, ((unsigned short *)0x5000000), 256);
+    DMANow(3, tilesetPal, ((unsigned short *)0x5000000), 32);
+    DMANow(3, UItilesetPal, ((unsigned short *)0x5000000) + 32, 16);
     DMANow(3, spritesheetPal, ((u16 *)0x5000200), 256);
 
     DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
@@ -785,16 +864,11 @@ void goToStart() {
 }
 
 void start() {
-    if ((!(~(oldButtons) & ((1<<2))) && (~(buttons) & ((1<<2))))) {
+    if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToInstructions();
     }
-    if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
-        winFlag = 0;
-        lives = 3;
-        goToGame();
-    }
-    bg2hOff += 12;
-    bg3hOff += 6;
+    bg2hOff += 10;
+    bg3hOff += 4;
 
     waitForVBlank();
     (*(volatile unsigned short*) 0x04000018) = ((bg2hOff) >> 4);
@@ -803,6 +877,17 @@ void start() {
 
 void goToInstructions() {
     (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (3 % 4)));
+    hideSprites();
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
+
+    DMANow(3, instructionsScreenLayer1Map, &((SB*) 0x6000000)[16], 1024);
+    DMANow(3, instructionsScreenLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    setScreenblockPalette(16, 2);
+    setScreenblockPalette(28, 1);
+
+    resetOff();
     state = INSTRUCTIONS;
 }
 
@@ -812,8 +897,14 @@ void instructions() {
     }
 
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
+        winFlag = 0;
+        cheatFlag = 0;
+        lives = 3;
         goToGame();
     }
+
+    waitForVBlank();
+    (*(volatile unsigned short*) 0x0400001C) = 0;
 }
 
 void goToGame() {
@@ -834,6 +925,8 @@ void goToGame() {
     DMANow(3, level1MapLayer2Map, &((SB*) 0x6000000)[20], (8192) / 2);
     DMANow(3, level1MapLayer1Map, &((SB*) 0x6000000)[24], (8192) / 2);
     DMANow(3, level1MapLayer0Map, &((SB*) 0x6000000)[28], (8192) / 2);
+
+    setScreenblockPalette(16, 2);
 
     state = GAME;
     initGame();
@@ -863,7 +956,7 @@ void game() {
 
 void resumeGame() {
     (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
-    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((19) << 8) | (0 << 7) | 0;
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
     (*(volatile unsigned short*) 0x400000A) = (3 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
     (*(volatile unsigned short*) 0x400000C) = (3 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
     (*(volatile unsigned short*) 0x400000E) = (3 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
@@ -871,6 +964,7 @@ void resumeGame() {
     DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
     DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
 
+    DMANow(3, 0, &((SB*) 0x6000000)[16], 1024);
     DMANow(3, level1MapLayer2Map, &((SB*) 0x6000000)[20], (8192) / 2);
     DMANow(3, level1MapLayer1Map, &((SB*) 0x6000000)[24], (8192) / 2);
     DMANow(3, level1MapLayer0Map, &((SB*) 0x6000000)[28], (8192) / 2);
@@ -878,18 +972,16 @@ void resumeGame() {
 }
 
 void goToPause() {
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (3 % 4)));
     hideSprites();
-    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
-    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
     (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
-    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
-
-    DMANow(3, pauseMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
-    DMANow(3, pauseMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, pauseMenuLayer1Map, &((SB*) 0x6000000)[16], 1024);
     DMANow(3, pauseMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
+
+    setScreenblockPalette(16, 2);
+    setScreenblockPalette(28, 1);
 
     resetOff();
     state = PAUSE;
@@ -905,19 +997,18 @@ void pause() {
 }
 
 void goToWin() {
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4))) | (1 << 12);
     hideSprites();
-    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
     (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
     (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
-    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+    DMANow(3, winScreenLayer2Map, &((SB*) 0x6000000)[16], 1024);
+    DMANow(3, winScreenLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
+    DMANow(3, winScreenLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
 
-    DMANow(3, winMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
-    DMANow(3, winMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
-    DMANow(3, winMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
-
+    setScreenblockPalette(16, 2);
+    setScreenblockPalette(28, 1);
     resetOff();
     state = WIN;
 }
@@ -926,22 +1017,30 @@ void win() {
     if ((!(~(oldButtons) & ((1<<3))) && (~(buttons) & ((1<<3))))) {
         goToStart();
     }
+
+    shadowOAM[0].attr0 = ((15 * 8) & 0xFF) | (0<<13) | (0<<14);
+    shadowOAM[0].attr1 = ((13 * 8) & 0x1FF) | (1<<14);
+    shadowOAM[0].attr2 = (((0) & 0xF) <<12) | ((((4) * (32) + (0))) & 0x3FF) | (((2) & 3) << 10);
+
+    shadowOAM[1].attr0 = ((15 * 8) & 0xFF) | (0<<13) | (0<<14);
+    shadowOAM[1].attr1 = ((15 * 8) & 0x1FF) | (1<<14);
+    shadowOAM[1].attr2 = (((0) & 0xF) <<12) | ((((20) * (32) + (0))) & 0x3FF) | (((2) & 3) << 10);
+    waitForVBlank();
+    DMANow(3, shadowOAM, ((OBJ_ATTR*)(0x7000000)), 128*4);
 }
 
 void goToLose() {
-    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (1 % 4))) | (1 << (8 + (2 % 4))) | (1 << (8 + (3 % 4)));
+    (*(volatile unsigned short *)0x4000000) = ((0) & 7) | (1 << (8 + (0 % 4))) | (1 << (8 + (3 % 4)));
     hideSprites();
-    (*(volatile unsigned short*) 0x400000A) = (0 << 14) | ((0) << 2) | ((20) << 8) | (0 << 7) | 1;
-    (*(volatile unsigned short*) 0x400000C) = (0 << 14) | ((0) << 2) | ((24) << 8) | (0 << 7) | 3;
+    (*(volatile unsigned short*) 0x4000008) = (0 << 14) | ((1) << 2) | ((16) << 8) | (0 << 7) | 0;
     (*(volatile unsigned short*) 0x400000E) = (0 << 14) | ((0) << 2) | ((28) << 8) | (0 << 7) | 3;
 
-    DMANow(3, tilesetTiles, ((CB*) 0x6000000), sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, ((CB*) 0x6000000) + 4, sizeof(spritesheetTiles) / 2);
+    DMANow(3, loseScreenLayer1Map, &((SB*) 0x6000000)[16], 1024);
+    DMANow(3, loseScreenLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
 
-    DMANow(3, loseMenuLayer2Map, &((SB*) 0x6000000)[20], (2048) / 2);
-    DMANow(3, loseMenuLayer1Map, &((SB*) 0x6000000)[24], (2048) / 2);
-    DMANow(3, loseMenuLayer0Map, &((SB*) 0x6000000)[28], (2048) / 2);
-
+    setScreenblockPalette(16, 2);
+    setScreenblockPalette(28, 1);
+    playAnalogSound(DEATH);
     resetOff();
     state = LOSE;
 }

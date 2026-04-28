@@ -955,7 +955,7 @@ typedef struct {
   u8 oamIndex;
 } SPRITE;
 # 4 "game.h" 2
-# 16 "game.h"
+# 18 "game.h"
 typedef enum {LEFT, RIGHT, DOWN, UP} DIRECTION;
 typedef enum {IDLE, WALK, DODGE, ATTACK, HIT} ANIMATION_STATE;
 typedef enum {PATROL, CHASE, RETURN} ENEMY_STATE;
@@ -966,15 +966,21 @@ static int playerIdleFrames[] = {0};
 static int playerWalkFrames[] = {2, 4, 6, 8, 10, 12};
 static int playerDodgeFrames[] = {14, 16, 18, 20, 22, 24};
 static int playerAttackFrames[] = {64, 66, 68, 70};
+static int playerHitFrames[] = {26, 0, 26};
 static int swordFrames[] = {74, 76, 78, 80};
 static int swordOffsetSide[][2] = {{-6, -2}, {-7, -2}, {-7, 1}, {-6, 1}};
 static int swordOffsetDown[][2] = {{0, -1}, {0, 5}, {3, 5}, {3, 5}};
 static int swordOffsetUp[][2] = {{2, -5}, {2, -5}, {0, -5}, {0, -5}};
-static int enemyPatrolPoints[][4][2] = {{{176, 416}, {232, 416}, {232, 472}, {176, 472}}, {{348, 408}, {392, 408}, {392, 456}, {348, 456}},
-                                        {{384, 368}, {472, 368}, {472, 400}, {384, 400}}, {{184, 232}, {232, 232}, {232, 288}, {184, 288}}};
+static int enemyPatrolPoints[][4][2] = {{{200, 424}, {272, 424}, {272, 460}, {200, 460}}, {{368, 416}, {424, 416}, {424, 440}, {368, 440}},
+                                        {{456, 352}, {392, 352}, {392, 384}, {456, 384}}, {{360, 320}, {424, 320}, {424, 272}, {360, 272}},
+                                        {{296, 264}, {296, 304}, {360, 304}, {360, 264}}, {{192, 240}, {232, 240}, {232, 304}, {192, 304}},
+                                        {{128, 224}, {128, 264}, {168, 264}, {168, 224}}, {{56, 200}, {136, 200}, {56, 200}, {136, 200}},
+                                        {{72, 96}, {72, 128}, {128, 128}, {128, 96}}, {{168, 112}, {120, 112}, {120, 72}, {168, 72}},
+                                        {{216, 40}, {216, 72}, {176, 72}, {176, 40}}};
 static int enemyIdleFrames[] = {0};
 static int enemyWalkFrames[] = {2, 4, 6, 8, 10};
 static int enemyAttackFrames[] = {12, 14, 16, 18, 20, 22, 24};
+static int korokFrames[] = {576, 578, 580, 582};
 
 typedef struct {
     int x;
@@ -1007,7 +1013,7 @@ typedef struct {
     int numFrames;
     u8 oamIndex;
 } Sword;
-# 75 "game.h"
+# 83 "game.h"
 typedef struct {
     int active;
     int x;
@@ -1049,35 +1055,93 @@ typedef struct {
     u8 oamIndex;
 } Bullet;
 
+
+
+
+
+
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int vX;
+    int vY;
+    int hitboxOffX;
+    int hitboxOffY;
+    int hitboxW;
+    int hitboxH;
+    DIRECTION direction;
+    int lifetime;
+    u8 oamIndex;
+} Slash;
+
+typedef struct {
+    int active;
+    int x;
+    int y;
+    int promptVisible;
+    int timeUntilNextFrame;
+    int currentFrame;
+    int* frames;
+    int numFrames;
+    u8 oamIndex;
+} Korok;
+
+
+
+
+
+
+
+typedef struct {
+    int tileX;
+    int tileY;
+    int cut;
+} Bush;
+
 void initGame();
 void initPlayer();
 void initSword();
+void initSlashes();
 void initEnemies();
 void initBullets();
+void initKorok();
+void initBushes();
 
 void updateGame();
 void updateEnvironment();
 void updateCamera();
+void setPlayerMovementFromInputs();
+void moveAndCollidePlayer();
 void updatePlayer();
 void attack();
+void updateSlashes();
 void updateEnemies();
 void updateEnemy(Enemy* enemy);
 void updateBullets();
 void spawnBullet(int x, int y, DIRECTION direction);
+int checkBushCollision(int x, int y);
+int checkHitboxCollision(int left, int top, int right, int bottom, u32 colorMask);
 void checkEntityCollisions();
+void updateKorok();
 
 void drawGame();
 void drawPlayer();
+void drawSlashes();
 void drawEnemies();
 void drawBullets();
+void drawKorok();
 void drawHUD();
 
 extern Player player;
 extern Sword sword;
-extern Enemy enemies[4];
+extern Enemy enemies[11];
 extern Bullet bullets[16];
+extern Korok korok;
+extern Slash slashes[3];
 extern int lives;
 extern int winFlag;
+extern int cheatFlag;
 # 4 "game.c" 2
 # 1 "print.h" 1
 # 35 "print.h"
@@ -1100,7 +1164,6 @@ void mgba_close(void);
 extern const unsigned short level1MapLayer0Map[4096];
 extern const unsigned short level1MapLayer1Map[4096];
 extern const unsigned short level1MapLayer2Map[4096];
-extern const unsigned short level1MapLayer3Map[4096];
 # 8 "game.c" 2
 # 1 "utils.h" 1
 
@@ -1109,8 +1172,12 @@ extern const unsigned short level1MapLayer3Map[4096];
 
 
 
+void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
+
+void setMapTile(int screenblock, int x, int y, u16 tileId);
+
 u8 colorAt(int x, int y);
 u8 mapCollide(int x, int y, u32 colorMask);
 u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
@@ -1208,27 +1275,38 @@ typedef struct noteWithDuration {
   unsigned char duration;
 } NoteWithDuration;
 
+typedef enum {DASH, SWING, OUCH, KILL, BUSH, POWERUP, VICTORY, DEATH} SOUND_FX;
+
 void initSound();
 void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime);
 void playNoteWithDuration(NoteWithDuration *n, unsigned char duty);
 void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty);
-void playAnalogSound(unsigned short sound);
+void playAnalogSound(SOUND_FX sound);
 # 11 "game.c" 2
 
 Player player;
 Sword sword;
-Enemy enemies[4];
+Slash slashes[3];
+Enemy enemies[11];
 Bullet bullets[16];
+Korok korok;
+Bush bushes[64];
 int lives;
 int winFlag;
+int cheatFlag;
 int hOff, vOff;
 int waterColor;
+int bushCount;
+
 
 void initGame() {
     initPlayer();
     initSword();
+    initSlashes();
     initEnemies();
     initBullets();
+    initKorok();
+    initBushes();
 
     waterColor = 0;
 }
@@ -1239,11 +1317,11 @@ void initPlayer() {
     player.vX = 0;
     player.vY = 0;
     player.hitboxOffX = 4;
-    player.hitboxOffY = 7;
+    player.hitboxOffY = 9;
     player.hitboxW = 8;
-    player.hitboxH = 8;
-    player.timeUntilNextFrame = 5;
-    player.direction = LEFT;
+    player.hitboxH = 7;
+    player.timeUntilNextFrame = 6;
+    player.direction = DOWN;
     player.currentFrame = 0;
     player.frames = playerIdleFrames;
     player.numFrames = 1;
@@ -1265,8 +1343,25 @@ void initSword() {
     sword.oamIndex = 0;
 }
 
+void initSlashes() {
+    for (int i = 0; i < 3; i++) {
+        slashes[i].active = 0;
+        slashes[i].x = 0;
+        slashes[i].y = 0;
+        slashes[i].vX = 0;
+        slashes[i].vY = 0;
+        slashes[i].hitboxOffX = 0;
+        slashes[i].hitboxOffY = 0;
+        slashes[i].hitboxW = 0;
+        slashes[i].hitboxH = 0;
+        slashes[i].direction = LEFT;
+        slashes[i].lifetime = 0;
+        slashes[i].oamIndex = 11 + 16 + 2 + i;
+    }
+}
+
 void initEnemies() {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 11; i++) {
         enemies[i].x = ((enemyPatrolPoints[i][0][0]) << 4);
         enemies[i].y = ((enemyPatrolPoints[i][0][1]) << 4);
         enemies[i].vX = 0;
@@ -1301,21 +1396,48 @@ void initBullets() {
         bullets[i].hitboxW = 4;
         bullets[i].hitboxH = 4;
         bullets[i].direction = LEFT;
-        bullets[i].oamIndex = 4 + 2 + i;
+        bullets[i].oamIndex = 11 + 2 + i;
+    }
+}
+
+void initKorok() {
+    korok.active = 1;
+    korok.x = ((430) << 4);
+    korok.y = ((80) << 4);
+    korok.currentFrame = 0;
+    korok.frames = korokFrames;
+    korok.numFrames = 4;
+    korok.oamIndex = 11 + 16 + 3 + 2;
+}
+
+void initBushes() {
+    bushCount = 0;
+
+    for (int y = 0; y < (512) / 8; y++) {
+        for (int x = 0; x < (512) / 8; x++) {
+            if (colorAt(x * 8, y * 8) == 4 && bushCount < 64) {
+                bushes[bushCount].tileX = x;
+                bushes[bushCount].tileY = y;
+                bushes[bushCount].cut = 0;
+                bushCount++;
+            }
+        }
     }
 }
 
 void updateGame() {
     updatePlayer();
+    updateSlashes();
     updateEnemies();
     updateBullets();
-    updateCamera();
+    updateKorok();
     checkEntityCollisions();
+    updateCamera();
     updateEnvironment();
 }
 
 void updateEnvironment() {
-    ((unsigned short *)0x5000000)[11] = waterColorUpdate[(waterColor / 16) % 8];
+    ((unsigned short *)0x5000000)[12] = waterColorUpdate[(waterColor / 16) % 8];
     waterColor++;
 }
 
@@ -1355,60 +1477,23 @@ void updateCamera() {
     (*(volatile unsigned short*) 0x0400001E) = vOff;
 }
 
-void updatePlayer() {
-    player.timeUntilNextFrame--;
-    if (player.timeUntilNextFrame <= 0) {
-        player.timeUntilNextFrame = 6;
-        player.currentFrame++;
-
-        if (player.currentFrame >= player.numFrames) {
-            if (player.state == ATTACK || player.state == DODGE) {
-                player.state = IDLE;
-                player.frames = playerIdleFrames;
-                player.numFrames = 1;
-                sword.active = 0;
-            }
-            player.currentFrame = 0;
-        }
-    }
-
-    if (player.state == ATTACK) return;
-
+void setPlayerMovementFromInputs() {
     player.vX = 0;
     player.vY = 0;
 
-    if ((~(buttons) & ((1<<6)))) { player.vY -= 10; player.direction = UP; }
-    if ((~(buttons) & ((1<<7)))) { player.vY += 10; player.direction = DOWN; }
-    if ((~(buttons) & ((1<<5)))) { player.vX -= 10; player.direction = LEFT; }
-    if ((~(buttons) & ((1<<4)))) { player.vX += 10; player.direction = RIGHT; }
+    if ((~(buttons) & ((1<<6)))) {player.vY -= 10; player.direction = UP;}
+    if ((~(buttons) & ((1<<7)))) {player.vY += 10; player.direction = DOWN;}
+    if ((~(buttons) & ((1<<5)))) {player.vX -= 10; player.direction = LEFT;}
+    if ((~(buttons) & ((1<<4)))) {player.vX += 10; player.direction = RIGHT;}
+}
 
-    if ((!(~(oldButtons) & ((1<<9))) && (~(buttons) & ((1<<9)))) && player.state != DODGE) {
-        player.state = DODGE;
-        player.frames = playerDodgeFrames;
-        player.numFrames = 5;
-        player.currentFrame = 0;
-        player.timeUntilNextFrame = 6;
-    }
-
-    if ((!(~(oldButtons) & ((1<<0))) && (~(buttons) & ((1<<0)))) && player.state != DODGE) {
-        attack();
-        return;
-    }
-
-    if (player.state == DODGE) {
-        player.vX = (player.vX * 3) / 2;
-        player.vY = (player.vY * 3) / 2;
-    }
-
+void moveAndCollidePlayer() {
     int playerLeft = ((player.x + player.vX) >> 4) + player.hitboxOffX;
     int playerTop = ((player.y) >> 4) + player.hitboxOffY;
     int playerRight = playerLeft + player.hitboxW - 1;
     int playerBottom = playerTop + player.hitboxH - 1;
 
-    if (mapCollide(playerLeft, playerTop, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerRight, playerTop, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerLeft, playerBottom, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
+    if (checkHitboxCollision(playerLeft, playerTop, playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
         player.vX = 0;
     }
 
@@ -1417,22 +1502,8 @@ void updatePlayer() {
     playerRight = playerLeft + player.hitboxW - 1;
     playerBottom = playerTop + player.hitboxH - 1;
 
-    if (mapCollide(playerLeft, playerTop, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerRight, playerTop, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerLeft, playerBottom, ((1 << 1) | (1 << 3))) ||
-        mapCollide(playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
+    if (checkHitboxCollision(playerLeft, playerTop, playerRight, playerBottom, ((1 << 1) | (1 << 3)))) {
         player.vY = 0;
-    }
-
-    playerLeft = ((player.x) >> 4) + player.hitboxOffX;
-    playerTop = ((player.y) >> 4) + player.hitboxOffY;
-    playerRight = playerLeft + player.hitboxW - 1;
-    playerBottom = playerTop + player.hitboxH - 1;
-
-    if (colorAt(playerLeft, playerTop) == 2 || colorAt(playerRight, playerTop) == 2 ||
-        colorAt(playerLeft, playerBottom) == 2 || colorAt(playerRight, playerBottom) == 2) {
-        winFlag = 1;
-        return;
     }
 
 
@@ -1443,18 +1514,101 @@ void updatePlayer() {
         player.x += player.vX;
         player.y += player.vY;
     }
+}
 
-    if (player.state == DODGE) return;
+void updatePlayer() {
 
-    if (player.vX == 0 && player.vY == 0) {
-        player.state = IDLE;
-        player.frames = playerIdleFrames;
-        player.numFrames = 1;
-        player.currentFrame = 0;
-    } else {
-        player.state = WALK;
-        player.frames = playerWalkFrames;
-        player.numFrames = 5;
+    player.timeUntilNextFrame--;
+    if (player.timeUntilNextFrame <= 0) {
+        player.timeUntilNextFrame = 6;
+        player.currentFrame++;
+
+        if (player.currentFrame >= player.numFrames) {
+            if (player.state == ATTACK || player.state == DODGE || player.state == HIT) {
+                player.state = IDLE;
+                player.frames = playerIdleFrames;
+                player.numFrames = 1;
+                sword.active = 0;
+            }
+            player.currentFrame = 0;
+        }
+    }
+    mgba_printf("Player state: %d, frame: %d", player.state, player.currentFrame);
+    int playerLeft, playerTop, playerRight, playerBottom;
+    switch (player.state) {
+        case DODGE:
+            setPlayerMovementFromInputs();
+            player.vX = (player.vX * 3) / 2;
+            player.vY = (player.vY * 3) / 2;
+            moveAndCollidePlayer();
+            break;
+        case ATTACK:
+            player.vX = 0;
+            player.vY = 0;
+            if (player.currentFrame < 2) {
+                if (player.direction == LEFT) player.vX = -8;
+                if (player.direction == RIGHT) player.vX = 8;
+                if (player.direction == UP) player.vY = -8;
+                if (player.direction == DOWN) player.vY = 8;
+                moveAndCollidePlayer();
+            }
+            break;
+        case HIT:
+
+            if (player.direction == LEFT) {
+                player.vX = 10;
+            } else if (player.direction == RIGHT) {
+                player.vX = -10;
+            } else if (player.direction == UP) {
+                player.vY = 10;
+            } else {
+                player.vY = -10;
+            }
+
+            moveAndCollidePlayer();
+            break;
+        default:
+            if ((!(~(oldButtons) & ((1<<9))) && (~(buttons) & ((1<<9))))) {
+                player.state = DODGE;
+                player.frames = playerDodgeFrames;
+                player.numFrames = 6;
+                player.currentFrame = 0;
+                player.timeUntilNextFrame = 6;
+                playAnalogSound(DASH);
+                break;
+            }
+            if ((!(~(oldButtons) & ((1<<0))) && (~(buttons) & ((1<<0))))) {
+                attack();
+                break;
+            }
+
+            setPlayerMovementFromInputs();
+            moveAndCollidePlayer();
+
+            if (player.vX == 0 && player.vY == 0) {
+                player.state = IDLE;
+                player.frames = playerIdleFrames;
+                player.numFrames = 1;
+                player.currentFrame = 0;
+            } else {
+                player.state = WALK;
+                player.frames = playerWalkFrames;
+                player.numFrames = 5;
+            }
+            break;
+    }
+
+
+    playerLeft = ((player.x) >> 4) + player.hitboxOffX;
+    playerTop = ((player.y) >> 4) + player.hitboxOffY;
+    playerRight = playerLeft + player.hitboxW - 1;
+    playerBottom = playerTop + player.hitboxH - 1;
+
+    if (colorAt(playerLeft, playerTop) == 2 || colorAt(playerRight, playerTop) == 2 ||
+        colorAt(playerLeft, playerBottom) == 2 || colorAt(playerRight, playerBottom) == 2) {
+        winFlag = 1;
+        playAnalogSound(VICTORY);
+        return;
     }
 }
 
@@ -1464,17 +1618,79 @@ void attack() {
     player.frames = playerAttackFrames;
     player.numFrames = 4;
     player.currentFrame = 0;
+    playAnalogSound(SWING);
     player.timeUntilNextFrame = 6;
 
     sword.active = 1;
-    player.direction = player.direction;
     sword.frames = swordFrames;
-    sword.numFrames = 5;
+    sword.numFrames = 4;
     sword.timeUntilNextFrame = 6;
+
+    if (cheatFlag) {
+        for (int i = 0; i < 3; i++) {
+            if (!slashes[i].active) {
+                slashes[i].active = 1;
+                if (player.direction == LEFT) {
+                    slashes[i].x = player.x - ((8) << 4);
+                    slashes[i].y = player.y;
+                    slashes[i].hitboxOffX = 6;
+                    slashes[i].hitboxOffY = 2;
+                    slashes[i].hitboxW = 6;
+                    slashes[i].hitboxH = 12;
+                    slashes[i].vX = -20;
+                    slashes[i].vY = 0;
+                } else if (player.direction == RIGHT) {
+                    slashes[i].x = player.x + ((8) << 4);
+                    slashes[i].y = player.y;
+                    slashes[i].hitboxOffX = 5;
+                    slashes[i].hitboxOffY = 2;
+                    slashes[i].hitboxW = 6;
+                    slashes[i].hitboxH = 12;
+                    slashes[i].vX = 20;
+                    slashes[i].vY = 0;
+                } else if (player.direction == UP) {
+                    slashes[i].y = player.y - ((4) << 4);
+                    slashes[i].x = player.x;
+                    slashes[i].hitboxOffX = 2;
+                    slashes[i].hitboxOffY = 6;
+                    slashes[i].hitboxW = 12;
+                    slashes[i].hitboxH = 6;
+                    slashes[i].vX = 0;
+                    slashes[i].vY = -20;
+                } else {
+                    slashes[i].y = player.y + ((4) << 4);
+                    slashes[i].x = player.x;
+                    slashes[i].hitboxOffX = 2;
+                    slashes[i].hitboxOffY = 5;
+                    slashes[i].hitboxW = 12;
+                    slashes[i].hitboxH = 6;
+                    slashes[i].vX = 0;
+                    slashes[i].vY = 20;
+                }
+                slashes[i].direction = player.direction;
+                slashes[i].lifetime = 60;
+                return;
+            }
+        }
+    }
+}
+
+void updateSlashes() {
+    for (int i = 0; i < 3; i++) {
+        if (!slashes[i].active) continue;
+
+        slashes[i].x += slashes[i].vX;
+        slashes[i].y += slashes[i].vY;
+        slashes[i].lifetime--;
+
+        if (slashes[i].lifetime <= 0) {
+            slashes[i].active = 0;
+        }
+    }
 }
 
 void updateEnemies() {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 11; i++) {
         if (!enemies[i].active) continue;
         updateEnemy(&enemies[i]);
     }
@@ -1482,46 +1698,61 @@ void updateEnemies() {
 
 void updateEnemy(Enemy* enemy) {
     int enemyIndex = enemy - enemies;
+    int patrolCount = sizeof(enemyPatrolPoints[enemyIndex]) / sizeof(enemyPatrolPoints[enemyIndex][0]);
+    int enemyX = ((enemy->x) >> 4);
+    int enemyY = ((enemy->y) >> 4);
+
     enemy->vX = 0;
     enemy->vY = 0;
 
-    if (enemy->animState == ATTACK) {
-        enemy->frames = enemyAttackFrames;
-        enemy->numFrames = 7;
-        if (!enemy->firedShot && enemy->currentFrame >= 3) {
-            spawnBullet(enemy->x, enemy->y, enemy->direction);
-            enemy->firedShot = 1;
-        }
-    } else {
-        int targetX = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][0];
-        int targetY = enemyPatrolPoints[enemyIndex][enemy->patrolTargetIndex][1];
-        int enemyX = ((enemy->x) >> 4);
-        int enemyY = ((enemy->y) >> 4);
+    if (enemy->animState != ATTACK) {
+        int targetIndex = enemy->patrolTargetIndex;
+        int targetX = enemyPatrolPoints[enemyIndex][targetIndex][0];
+        int targetY = enemyPatrolPoints[enemyIndex][targetIndex][1];
         int dX = targetX - enemyX;
         int dY = targetY - enemyY;
 
+
         if (abs(dX) <= 2 && abs(dY) <= 2) {
+
+            int nextIndex = (targetIndex + 1) % patrolCount;
+            int nextX = enemyPatrolPoints[enemyIndex][nextIndex][0];
+            int nextY = enemyPatrolPoints[enemyIndex][nextIndex][1];
+            int turnDX = nextX - enemyX;
+            int turnDY = nextY - enemyY;
+
+            if (abs(turnDX) >= abs(turnDY)) {
+                enemy->direction = (turnDX < 0) ? LEFT : RIGHT;
+            } else {
+                enemy->direction = (turnDY < 0) ? UP : DOWN;
+            }
+
+            enemy->patrolTargetIndex = nextIndex;
             enemy->animState = ATTACK;
             enemy->frames = enemyAttackFrames;
             enemy->numFrames = 7;
             enemy->currentFrame = 0;
             enemy->timeUntilNextFrame = 5;
             enemy->firedShot = 0;
-            enemy->patrolTargetIndex = (enemy->patrolTargetIndex + 1) % (sizeof(enemyPatrolPoints[enemyIndex]) / sizeof(enemyPatrolPoints[enemyIndex][0]));
-            dX = 0;
-            dY = 0;
         } else {
-            if (abs(dX)) {
+
+            if (abs(dX) >= abs(dY)) {
                 enemy->vX = (dX < 0) ? -6 : 6;
                 enemy->direction = (dX < 0) ? LEFT : RIGHT;
             } else {
                 enemy->vY = (dY < 0) ? -6 : 6;
                 enemy->direction = (dY < 0) ? UP : DOWN;
             }
+
             enemy->animState = WALK;
             enemy->frames = enemyWalkFrames;
             enemy->numFrames = 5;
         }
+    }
+
+    if (enemy->animState == ATTACK && !enemy->firedShot && enemy->currentFrame >= 3) {
+        spawnBullet(enemy->x, enemy->y, enemy->direction);
+        enemy->firedShot = 1;
     }
 
     enemy->timeUntilNextFrame--;
@@ -1553,7 +1784,7 @@ void spawnBullet(int x, int y, DIRECTION direction) {
             bullets[i].vX = 0;
             bullets[i].vY = 0;
             bullets[i].direction = direction;
-            bullets[i].lifetime = 180;
+            bullets[i].lifetime = 120;
 
             if (direction == LEFT) {
                 bullets[i].vX = -8;
@@ -1596,6 +1827,33 @@ void updateBullets() {
     }
 }
 
+int checkBushCollision(int x, int y) {
+    int tileX = x >> 3;
+    int tileY = y >> 3;
+
+    for (int i = 0; i < bushCount; i++) {
+        if (bushes[i].tileX == tileX && bushes[i].tileY == tileY) {
+            return !bushes[i].cut;
+        }
+    }
+
+    return 0;
+}
+
+int checkHitboxCollision(int left, int top, int right, int bottom, u32 colorMask) {
+    if (mapCollide(left, top, colorMask) ||
+        mapCollide(right, top, colorMask) ||
+        mapCollide(left, bottom, colorMask) ||
+        mapCollide(right, bottom, colorMask) ||
+        checkBushCollision(left, top) ||
+        checkBushCollision(right, top) ||
+        checkBushCollision(left, bottom) ||
+        checkBushCollision(right, bottom)) {
+        return 1;
+    }
+    return 0;
+}
+
 void checkEntityCollisions() {
     int playerX = ((player.x) >> 4);
     int playerY = ((player.y) >> 4);
@@ -1628,10 +1886,34 @@ void checkEntityCollisions() {
             break;
     }
 
+
+    if (sword.active) {
+        int leftTile = swordHitboxX >> 3;
+        int rightTile = (swordHitboxX + swordHitboxW - 1) >> 3;
+        int topTile = swordHitboxY >> 3;
+        int bottomTile = (swordHitboxY + swordHitboxH - 1) >> 3;
+
+        for (int tileY = topTile; tileY <= bottomTile; tileY++) {
+            for (int tileX = leftTile; tileX <= rightTile; tileX++) {
+                if (colorAt(tileX * 8, tileY * 8) == 4) {
+                    for (int i = 0; i < bushCount; i++) {
+                        if (bushes[i].tileX == tileX && bushes[i].tileY == tileY && !bushes[i].cut) {
+                            bushes[i].cut = 1;
+                            setMapTile(24, tileX, tileY, 129);
+                            playAnalogSound(BUSH);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     int pLeft = playerX + player.hitboxOffX;
     int pTop = playerY + player.hitboxOffY;
     int pRight = pLeft + player.hitboxW;
     int pBottom = pTop + player.hitboxH;
+
 
     if (player.state != DODGE && player.state != HIT) {
         for (int i = 0; i < 16; i++) {
@@ -1641,13 +1923,17 @@ void checkEntityCollisions() {
             if (hitboxCollide(pLeft, pTop, player.hitboxW, player.hitboxH, bulletX + bullets[i].hitboxOffX, bulletY + bullets[i].hitboxOffY, bullets[i].hitboxW, bullets[i].hitboxH)) {
                 bullets[i].active = 0;
                 lives--;
-                playAnalogSound(15);
+                playAnalogSound(OUCH);
+                player.state = HIT;
+                player.frames = playerHitFrames;
+                player.numFrames = sizeof(playerHitFrames) / sizeof(playerHitFrames[0]);
+                player.currentFrame = 0;
                 mgba_printf("Player hit by bullet!");
             }
         }
     }
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 11; i++) {
         if (!enemies[i].active) continue;
         int enemyX = ((enemies[i].x) >> 4);
         int enemyY = ((enemies[i].y) >> 4);
@@ -1657,9 +1943,24 @@ void checkEntityCollisions() {
             swordHitboxY < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
             swordHitboxY + swordHitboxH > enemyY + enemies[i].hitboxOffY && sword.active) {
             mgba_printf("Enemy hit!");
-            playAnalogSound(4);
+            playAnalogSound(KILL);
             enemies[i].active = 0;
             return;
+        }
+
+
+        for (int j = 0; j < 3; j++) {
+            if (!slashes[j].active) continue;
+            int slashX = ((slashes[j].x) >> 4);
+            int slashY = ((slashes[j].y) >> 4);
+            if (hitboxCollide(slashX + slashes[j].hitboxOffX, slashY + slashes[j].hitboxOffY, slashes[j].hitboxW, slashes[j].hitboxH,
+                enemyX + enemies[i].hitboxOffX, enemyY + enemies[i].hitboxOffY, enemies[i].hitboxW, enemies[i].hitboxH)) {
+                slashes[j].active = 0;
+                mgba_printf("Enemy hit by slash!");
+                playAnalogSound(KILL);
+                enemies[i].active = 0;
+                return;
+            }
         }
 
 
@@ -1669,17 +1970,45 @@ void checkEntityCollisions() {
             pTop < enemyY + enemies[i].hitboxOffY + enemies[i].hitboxH &&
             pBottom > enemyY + enemies[i].hitboxOffY) {
             mgba_printf("Player hit!");
-            playAnalogSound(15);
+            playAnalogSound(OUCH);
+            player.state = HIT;
+            player.frames = playerHitFrames;
+            player.numFrames = sizeof(playerHitFrames) / sizeof(playerHitFrames[0]);
+            player.currentFrame = 0;
             lives--;
         }
+    }
+}
+
+void updateKorok() {
+    korok.timeUntilNextFrame--;
+    if (korok.timeUntilNextFrame <= 0) {
+        korok.timeUntilNextFrame = 20;
+        korok.currentFrame = (korok.currentFrame + 1) % korok.numFrames;
+    }
+
+
+    if (player.x > korok.x - ((16) << 4) && player.x < korok.x + ((16) << 4) &&
+        player.y > korok.y - ((16) << 4) && player.y < korok.y + ((16) << 4) && !cheatFlag) {
+        korok.promptVisible = 1;
+
+        if ((!(~(oldButtons) & ((1<<1))) && (~(buttons) & ((1<<1))))) {
+            playAnalogSound(POWERUP);
+            cheatFlag = 1;
+            lives = 12;
+        }
+    } else {
+        korok.promptVisible = 0;
     }
 }
 
 void drawGame() {
     drawHUD();
     drawPlayer();
+    drawSlashes();
     drawEnemies();
     drawBullets();
+    drawKorok();
 
     waitForVBlank();
     DMANow(3, shadowOAM, ((OBJ_ATTR*)(0x7000000)), 128*4);
@@ -1728,8 +2057,26 @@ void drawPlayer() {
     shadowOAM[sword.oamIndex].attr2 = (((0) & 0xF) <<12) | frameTile | (((2) & 3) << 10);
 }
 
+void drawSlashes() {
+    for (int i = 0; i < 3; i++) {
+        Slash* slash = &slashes[i];
+        if (!slash->active || clipSpritesOffScreen(slash->oamIndex, ((slash->x) >> 4) - hOff, ((slash->y) >> 4) - vOff, 8, 8)) {
+            shadowOAM[slash->oamIndex].attr0 = (2<<8);
+            continue;
+        }
+
+        shadowOAM[slash->oamIndex].attr0 = ((((slash->y) >> 4) - vOff) & 0xFF) | (0<<13) | (0<<14);
+        shadowOAM[slash->oamIndex].attr1 = ((((slash->x) >> 4) - hOff) & 0x1FF) | (1<<14) | (slash->direction == RIGHT ? (1<<12) : 0);
+        if (slash->direction == LEFT) {
+            shadowOAM[slash->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((2) * (32) + (26))) & 0x3FF) | (((2) & 3) << 10);
+        } else {
+            shadowOAM[slash->oamIndex].attr2 = (((0) & 0xF) <<12) | ((((slash->direction * 4 - 2) * (32) + (26))) & 0x3FF) | (((2) & 3) << 10);
+        }
+    }
+}
+
 void drawEnemies() {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 11; i++) {
         Enemy* enemy = &enemies[i];
         if (!enemy->active || clipSpritesOffScreen(enemy->oamIndex, ((enemy->x) >> 4) - hOff, ((enemy->y) >> 4) - vOff, 16, 16)) {
             shadowOAM[enemy->oamIndex].attr0 = (2<<8);
@@ -1763,10 +2110,34 @@ void drawBullets() {
     }
 }
 
+void drawKorok() {
+    if (!korok.active || clipSpritesOffScreen(korok.oamIndex, ((korok.x) >> 4) - hOff, ((korok.y) >> 4) - vOff, 16, 16)) {
+        shadowOAM[korok.oamIndex].attr0 = (2<<8);
+        return;
+    }
+    shadowOAM[korok.oamIndex].attr0 = ((((korok.y) >> 4) - vOff) & 0xFF) | (0<<13) | (0<<14);
+    shadowOAM[korok.oamIndex].attr1 = ((((korok.x) >> 4) - hOff) & 0x1FF) | (1<<14);
+    shadowOAM[korok.oamIndex].attr2 = (((0) & 0xF) <<12) | ((((0) * (32) + (korok.frames[korok.currentFrame]))) & 0x3FF) | (((2) & 3) << 10);
+
+    if (korok.promptVisible) {
+        shadowOAM[korok.oamIndex + 1].attr0 = ((((korok.y) >> 4) - vOff - 8) & 0xFF) | (0<<13) | (0<<14);
+        shadowOAM[korok.oamIndex + 1].attr1 = ((((korok.x) >> 4) - hOff + 8) & 0x1FF) | (1<<14);
+        shadowOAM[korok.oamIndex + 1].attr2 = (((0) & 0xF) <<12) | ((((0) * (32) + (704))) & 0x3FF) | (((1) & 3) << 10);
+    } else {
+        shadowOAM[korok.oamIndex + 1].attr0 = (2<<8);
+    }
+}
+
 void drawHUD() {
+    if (cheatFlag) {
+        for (int i = 0; i < 12; i++) {
+            int tile = (i < lives) ? 1 : 1 + 1;
+            ((SB*) 0x6000000)[16].tilemap[1 * 32 + i + 1] = (tile & 1023) | ((2 & 15) << 12);
+        }
+        return;
+    }
     for (int i = 0; i < 3; i++) {
         int tile = (i < lives) ? 1 : 1 + 1;
-        ((SB*) 0x6000000)[19].tilemap[1 * 32 + i + 1] =
-            (tile & 1023) | ((2 & 15) << 12);
+        ((SB*) 0x6000000)[16].tilemap[1 * 32 + i + 1] = (tile & 1023) | ((2 & 15) << 12);
     }
 }

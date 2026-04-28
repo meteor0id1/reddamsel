@@ -7,6 +7,5 @@
 
 extern const unsigned short pauseMenuLayer0Map[1024];
 extern const unsigned short pauseMenuLayer1Map[1024];
-extern const unsigned short pauseMenuLayer2Map[1024];
 
 #endif

@@ -8,6 +8,5 @@
 extern const unsigned short level1MapLayer0Map[4096];
 extern const unsigned short level1MapLayer1Map[4096];
 extern const unsigned short level1MapLayer2Map[4096];
-extern const unsigned short level1MapLayer3Map[4096];
 
 #endif

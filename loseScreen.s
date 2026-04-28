@@ -10,15 +10,15 @@
 	.eabi_attribute 30, 2
 	.eabi_attribute 34, 0
 	.eabi_attribute 18, 4
-	.file	"pauseMenu.c"
+	.file	"loseScreen.c"
 	.text
-	.global	pauseMenuLayer1Map
-	.global	pauseMenuLayer0Map
+	.global	loseScreenLayer1Map
+	.global	loseScreenLayer0Map
 	.section	.rodata
 	.align	2
-	.type	pauseMenuLayer1Map, %object
-	.size	pauseMenuLayer1Map, 2048
-pauseMenuLayer1Map:
+	.type	loseScreenLayer1Map, %object
+	.size	loseScreenLayer1Map, 2048
+loseScreenLayer1Map:
 	.short	0
 	.short	0
 	.short	0
@@ -285,16 +285,16 @@ pauseMenuLayer1Map:
 	.short	0
 	.short	0
 	.short	0
+	.short	2
 	.short	0
-	.short	0
-	.short	80
-	.short	65
-	.short	85
-	.short	83
-	.short	69
 	.short	68
+	.short	69
+	.short	70
+	.short	69
+	.short	65
+	.short	84
 	.short	0
-	.short	0
+	.short	2
 	.short	0
 	.short	0
 	.short	0
@@ -1043,9 +1043,9 @@ pauseMenuLayer1Map:
 	.short	0
 	.short	0
 	.short	0
-	.type	pauseMenuLayer0Map, %object
-	.size	pauseMenuLayer0Map, 2048
-pauseMenuLayer0Map:
+	.type	loseScreenLayer0Map, %object
+	.size	loseScreenLayer0Map, 2048
+loseScreenLayer0Map:
 	.short	0
 	.short	0
 	.short	0

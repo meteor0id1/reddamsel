@@ -7,15 +7,17 @@
 #include "utils.h"
 #include "analogSound.h"
 #include "digitalSound.h"
+#include "sprites.h"
 
 #include "UItileset.h"
 #include "tileset.h"
 #include "spritesheet.h"
 #include "level1Map.h"
 #include "startScreen.h"
+#include "instructionsScreen.h"
 #include "pauseMenu.h"
-#include "winMenu.h"
-#include "loseMenu.h"
+#include "winScreen.h"
+#include "loseScreen.h"
 #include "bgMusic.h"
 
 void initialize();
@@ -94,7 +96,8 @@ void initialize() {
     setupInterrupts();
     playSoundA(bgMusic_data, bgMusic_length, 1);
 
-    DMANow(3, tilesetPal, BG_PALETTE, 256);
+    DMANow(3, tilesetPal, BG_PALETTE, 32);
+    DMANow(3, UItilesetPal, BG_PALETTE + 32, 16);
     DMANow(3, spritesheetPal, SPRITE_PAL, 256);
 
     DMANow(3, tilesetTiles, CHARBLOCK, sizeof(tilesetTiles) / 2);
@@ -152,16 +155,11 @@ void goToStart() {
 }
 
 void start() {
-    if (BUTTON_PRESSED(BUTTON_SELECT)) {
+    if (BUTTON_PRESSED(BUTTON_START)) {
         goToInstructions();
     }
-    if (BUTTON_PRESSED(BUTTON_START)) {
-        winFlag = 0;
-        lives = MAX_LIVES;
-        goToGame();
-    }
-    bg2hOff += 12;
-    bg3hOff += 6;
+    bg2hOff += 10;
+    bg3hOff += 4;
 
     waitForVBlank();
     REG_BG2HOFF = FROM_FIXED(bg2hOff);
@@ -170,6 +168,17 @@ void start() {
 
 void goToInstructions() {
     REG_DISPCTL = MODE(0) | BG_ENABLE(0) | BG_ENABLE(3);
+    hideSprites();
+    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(HUD_SCREENBLOCK) | BG_4BPP | 0;
+    REG_BG3CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(28) | BG_4BPP | 3;
+
+    DMANow(3, instructionsScreenLayer1Map, &SCREENBLOCK[HUD_SCREENBLOCK], 1024);
+    DMANow(3, instructionsScreenLayer0Map, &SCREENBLOCK[28], instructionsScreenMapLen / 2);
+
+    setScreenblockPalette(HUD_SCREENBLOCK, 2);
+    setScreenblockPalette(28, 1);
+
+    resetOff();
     state = INSTRUCTIONS;
 }
 
@@ -179,8 +188,14 @@ void instructions() {
     }
 
     if (BUTTON_PRESSED(BUTTON_START)) {
+        winFlag = 0;
+        cheatFlag = 0;
+        lives = MAX_LIVES;
         goToGame();
     }
+
+    waitForVBlank();
+    REG_BG3HOFF = 0;
 }
 
 void goToGame() {
@@ -201,6 +216,8 @@ void goToGame() {
     DMANow(3, level1MapLayer2Map, &SCREENBLOCK[20], level1MapMapLen / 2);
     DMANow(3, level1MapLayer1Map, &SCREENBLOCK[24], level1MapMapLen / 2);
     DMANow(3, level1MapLayer0Map, &SCREENBLOCK[28], level1MapMapLen / 2);
+
+    setScreenblockPalette(HUD_SCREENBLOCK, 2);
 
     state = GAME;
     initGame();
@@ -230,7 +247,7 @@ void game() {
 
 void resumeGame() {
     REG_DISPCTL = MODE(0) | BG_ENABLE(0) | BG_ENABLE(1) | BG_ENABLE(2) | BG_ENABLE(3) | SPRITE_ENABLE;
-    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(19) | BG_4BPP | 0;
+    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(HUD_SCREENBLOCK) | BG_4BPP | 0;
     REG_BG1CNT = BG_SIZE_LARGE | BG_CHARBLOCK(0) | BG_SCREENBLOCK(20) | BG_4BPP | 1;
     REG_BG2CNT = BG_SIZE_LARGE | BG_CHARBLOCK(0) | BG_SCREENBLOCK(24) | BG_4BPP | 3;
     REG_BG3CNT = BG_SIZE_LARGE | BG_CHARBLOCK(0) | BG_SCREENBLOCK(28) | BG_4BPP | 3;
@@ -238,6 +255,7 @@ void resumeGame() {
     DMANow(3, tilesetTiles, CHARBLOCK, sizeof(tilesetTiles) / 2);
     DMANow(3, spritesheetTiles, CHARBLOCK + 4, sizeof(spritesheetTiles) / 2);
 
+    DMANow(3, 0, &SCREENBLOCK[HUD_SCREENBLOCK], 1024);
     DMANow(3, level1MapLayer2Map, &SCREENBLOCK[20], level1MapMapLen / 2);
     DMANow(3, level1MapLayer1Map, &SCREENBLOCK[24], level1MapMapLen / 2);
     DMANow(3, level1MapLayer0Map, &SCREENBLOCK[28], level1MapMapLen / 2);
@@ -245,18 +263,16 @@ void resumeGame() {
 }
 
 void goToPause() {
-    REG_DISPCTL = MODE(0) | BG_ENABLE(1) | BG_ENABLE(2) | BG_ENABLE(3);
+    REG_DISPCTL = MODE(0) | BG_ENABLE(0) | BG_ENABLE(3);
     hideSprites();
-    REG_BG1CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(20) | BG_4BPP | 1;
-    REG_BG2CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(24) | BG_4BPP | 3;
+    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(HUD_SCREENBLOCK) | BG_4BPP | 0;
     REG_BG3CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(28) | BG_4BPP | 3;
 
-    DMANow(3, tilesetTiles, CHARBLOCK, sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, CHARBLOCK + 4, sizeof(spritesheetTiles) / 2);
-
-    DMANow(3, pauseMenuLayer2Map, &SCREENBLOCK[20], pauseMenuMapLen / 2);
-    DMANow(3, pauseMenuLayer1Map, &SCREENBLOCK[24], pauseMenuMapLen / 2);
+    DMANow(3, pauseMenuLayer1Map, &SCREENBLOCK[HUD_SCREENBLOCK], 1024);
     DMANow(3, pauseMenuLayer0Map, &SCREENBLOCK[28], pauseMenuMapLen / 2);
+
+    setScreenblockPalette(HUD_SCREENBLOCK, 2);
+    setScreenblockPalette(28, 1);
 
     resetOff();
     state = PAUSE;
@@ -272,19 +288,18 @@ void pause() {
 }
 
 void goToWin() {
-    REG_DISPCTL = MODE(0) | BG_ENABLE(1) | BG_ENABLE(2) | BG_ENABLE(3);
+    REG_DISPCTL = MODE(0) | BG_ENABLE(0) | BG_ENABLE(2) | BG_ENABLE(3) | SPRITE_ENABLE;
     hideSprites();
-    REG_BG1CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(20) | BG_4BPP | 1;
+    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(HUD_SCREENBLOCK) | BG_4BPP | 0;
     REG_BG2CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(24) | BG_4BPP | 3;
     REG_BG3CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(28) | BG_4BPP | 3;
 
-    DMANow(3, tilesetTiles, CHARBLOCK, sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, CHARBLOCK + 4, sizeof(spritesheetTiles) / 2);
+    DMANow(3, winScreenLayer2Map, &SCREENBLOCK[HUD_SCREENBLOCK], 1024);
+    DMANow(3, winScreenLayer1Map, &SCREENBLOCK[24], winScreenMapLen / 2);
+    DMANow(3, winScreenLayer0Map, &SCREENBLOCK[28], winScreenMapLen / 2);
 
-    DMANow(3, winMenuLayer2Map, &SCREENBLOCK[20], winMenuMapLen / 2);
-    DMANow(3, winMenuLayer1Map, &SCREENBLOCK[24], winMenuMapLen / 2);
-    DMANow(3, winMenuLayer0Map, &SCREENBLOCK[28], winMenuMapLen / 2);
-
+    setScreenblockPalette(HUD_SCREENBLOCK, 2);
+    setScreenblockPalette(28, 1);
     resetOff();
     state = WIN;
 }
@@ -293,22 +308,30 @@ void win() {
     if (BUTTON_PRESSED(BUTTON_START)) {
         goToStart();
     }
+
+    shadowOAM[0].attr0 = ROWMASK(15 * 8) | ATTR0_4BPP | ATTR0_SQUARE;
+    shadowOAM[0].attr1 = COLMASK(13 * 8) | ATTR1_SMALL;
+    shadowOAM[0].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(0, 4) | ATTR2_PRIORITY(2);
+
+    shadowOAM[1].attr0 = ROWMASK(15 * 8) | ATTR0_4BPP | ATTR0_SQUARE;
+    shadowOAM[1].attr1 = COLMASK(15 * 8) | ATTR1_SMALL;
+    shadowOAM[1].attr2 = ATTR2_PALROW(0) | ATTR2_TILEID(0, 20) | ATTR2_PRIORITY(2);
+    waitForVBlank();
+    DMANow(3, shadowOAM, OAM, 128*4);
 }
 
 void goToLose() {
-    REG_DISPCTL = MODE(0) | BG_ENABLE(1) | BG_ENABLE(2) | BG_ENABLE(3);
+    REG_DISPCTL = MODE(0) | BG_ENABLE(0) | BG_ENABLE(3);
     hideSprites();
-    REG_BG1CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(20) | BG_4BPP | 1;
-    REG_BG2CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(24) | BG_4BPP | 3;
+    REG_BG0CNT = BG_SIZE_SMALL | BG_CHARBLOCK(1) | BG_SCREENBLOCK(HUD_SCREENBLOCK) | BG_4BPP | 0;
     REG_BG3CNT = BG_SIZE_SMALL | BG_CHARBLOCK(0) | BG_SCREENBLOCK(28) | BG_4BPP | 3;
 
-    DMANow(3, tilesetTiles, CHARBLOCK, sizeof(tilesetTiles) / 2);
-    DMANow(3, spritesheetTiles, CHARBLOCK + 4, sizeof(spritesheetTiles) / 2);
+    DMANow(3, loseScreenLayer1Map, &SCREENBLOCK[HUD_SCREENBLOCK], 1024);
+    DMANow(3, loseScreenLayer0Map, &SCREENBLOCK[28], loseScreenMapLen / 2);
 
-    DMANow(3, loseMenuLayer2Map, &SCREENBLOCK[20], loseMenuMapLen / 2);
-    DMANow(3, loseMenuLayer1Map, &SCREENBLOCK[24], loseMenuMapLen / 2);
-    DMANow(3, loseMenuLayer0Map, &SCREENBLOCK[28], loseMenuMapLen / 2);
-
+    setScreenblockPalette(HUD_SCREENBLOCK, 2);
+    setScreenblockPalette(28, 1);
+    playAnalogSound(DEATH);
     resetOff();
     state = LOSE;
 }

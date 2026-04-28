@@ -3,9 +3,11 @@
 #include "level1CM.h"
 #include "sprites.h"
 
-const unsigned short* currentCollisionMap = level1CMBitmap;
-static int collisionMapWidth = 256;
-static int collisionMapHeight = 256;
+static u8 collisionMapRuntime[LEVEL1MAP_WIDTH * LEVEL1MAP_HEIGHT];
+
+const unsigned short* currentCollisionMap = (const unsigned short*)collisionMapRuntime;
+static int collisionMapWidth = LEVEL1MAP_WIDTH;
+static int collisionMapHeight = LEVEL1MAP_HEIGHT;
 
 void setScreenblockPalette(int screenblock, int palRow) {
     for (int i = 0; i < 1024; i++) {
@@ -23,14 +25,16 @@ int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int h
     return (screenX <= -width || screenX >= SCREENWIDTH || screenY <= -height || screenY >= SCREENHEIGHT);
 }
 
-void setCollisionMap(const unsigned short* bitmap, int width, int height) {
-    if (width <= 0 || height <= 0) {
+void setMapTile(int baseScreenblock, int tileX, int tileY, u16 tileId) {
+    if (tileX < 0 || tileX >= (LEVEL1MAP_WIDTH / 8) || tileY < 0 || tileY >= (LEVEL1MAP_HEIGHT / 8)) {
         return;
     }
+    int screenblock = baseScreenblock + (tileY / 32) * 2 + (tileX / 32);
+    int localX = tileX % 32;
+    int localY = tileY % 32;
 
-    currentCollisionMap = bitmap;
-    collisionMapWidth = width;
-    collisionMapHeight = height;
+    u16 *entry = &SCREENBLOCK[screenblock].tilemap[OFFSET(localX, localY, 32)];
+    *entry = (*entry & ~0x03FF) | TILEMAP_ENTRY_TILEID(tileId);
 }
 
 u8 colorAt(int x, int y) {

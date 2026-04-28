@@ -83,25 +83,34 @@ clipSpritesOffScreen:
 	bx	lr
 	.size	clipSpritesOffScreen, .-clipSpritesOffScreen
 	.align	2
-	.global	setCollisionMap
+	.global	setMapTile
 	.syntax unified
 	.arm
-	.type	setCollisionMap, %function
-setCollisionMap:
+	.type	setMapTile, %function
+setMapTile:
 	@ Function supports interworking.
 	@ args = 0, pretend = 0, frame = 0
 	@ frame_needed = 0, uses_anonymous_args = 0
 	@ link register save eliminated.
-	cmp	r2, #0
-	cmpgt	r1, #0
-	ldrgt	r3, .L16
-	strgt	r0, [r3]
+	orr	ip, r1, r2
+	cmp	ip, #63
+	bxhi	lr
+	asr	ip, r2, #5
+	add	r0, r0, ip, lsl #1
+	add	r0, r0, r1, asr #5
+	and	r2, r2, #31
+	and	r1, r1, #31
+	add	r1, r1, r2, lsl #5
+	lsl	r0, r0, #11
+	add	r0, r0, #100663296
+	lsl	r1, r1, #1
+	ldrh	r2, [r0, r1]
+	lsl	r3, r3, #22
+	and	r2, r2, #64512
+	orr	r2, r2, r3, lsr #22
+	strh	r2, [r0, r1]	@ movhi
 	bx	lr
-.L17:
-	.align	2
-.L16:
-	.word	.LANCHOR0
-	.size	setCollisionMap, .-setCollisionMap
+	.size	setMapTile, .-setMapTile
 	.align	2
 	.global	colorAt
 	.syntax unified
@@ -112,13 +121,13 @@ colorAt:
 	@ args = 0, pretend = 0, frame = 0
 	@ frame_needed = 0, uses_anonymous_args = 0
 	@ link register save eliminated.
-	ldr	r3, .L19
+	ldr	r3, .L17
 	add	r0, r0, r1, lsl #9
 	ldrb	r0, [r3, r0]	@ zero_extendqisi2
 	bx	lr
-.L20:
+.L18:
 	.align	2
-.L19:
+.L17:
 	.word	level1CMBitmap
 	.size	colorAt, .-colorAt
 	.align	2
@@ -133,26 +142,26 @@ mapCollide:
 	@ link register save eliminated.
 	orr	r3, r0, r1
 	cmp	r3, #512
-	bcc	.L25
+	bcc	.L23
 	mov	r0, #1
 	bx	lr
-.L25:
-	ldr	r3, .L26
+.L23:
+	ldr	r3, .L24
 	add	r0, r0, r1, lsl #9
 	ldrb	r3, [r3, r0]	@ zero_extendqisi2
 	cmp	r3, #31
-	bhi	.L24
+	bhi	.L22
 	mov	r1, #1
 	ands	r2, r2, r1, lsl r3
 	movne	r0, r1
 	moveq	r0, #0
 	bx	lr
-.L24:
+.L22:
 	mov	r0, #0
 	bx	lr
-.L27:
+.L25:
 	.align	2
-.L26:
+.L24:
 	.word	level1CMBitmap
 	.size	mapCollide, .-mapCollide
 	.align	2
@@ -169,20 +178,20 @@ hitboxCollide:
 	ldr	ip, [sp, #12]
 	add	ip, lr, ip
 	cmp	ip, r0
-	ble	.L32
+	ble	.L30
 	add	r0, r0, r2
 	cmp	r0, lr
-	bgt	.L34
-.L32:
+	bgt	.L32
+.L30:
 	mov	r0, #0
 	ldr	lr, [sp], #4
 	bx	lr
-.L34:
+.L32:
 	ldr	r2, [sp, #8]
 	ldr	r0, [sp, #16]
 	add	r2, r2, r0
 	cmp	r2, r1
-	ble	.L32
+	ble	.L30
 	add	r0, r1, r3
 	ldr	r3, [sp, #8]
 	cmp	r0, r3
@@ -216,9 +225,14 @@ resetOff:
 	.global	currentCollisionMap
 	.data
 	.align	2
-	.set	.LANCHOR0,. + 0
 	.type	currentCollisionMap, %object
 	.size	currentCollisionMap, 4
 currentCollisionMap:
-	.word	level1CMBitmap
+	.word	collisionMapRuntime
+	.bss
+	.align	2
+	.type	collisionMapRuntime, %object
+	.size	collisionMapRuntime, 262144
+collisionMapRuntime:
+	.space	262144
 	.ident	"GCC: (devkitARM) 15.2.0"

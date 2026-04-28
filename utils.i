@@ -63,6 +63,9 @@ typedef struct {
 void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
+
+void setMapTile(int screenblock, int x, int y, u16 tileId);
+
 u8 colorAt(int x, int y);
 u8 mapCollide(int x, int y, u32 colorMask);
 u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
@@ -79,7 +82,6 @@ void resetOff();
 extern const unsigned short level1MapLayer0Map[4096];
 extern const unsigned short level1MapLayer1Map[4096];
 extern const unsigned short level1MapLayer2Map[4096];
-extern const unsigned short level1MapLayer3Map[4096];
 # 3 "utils.c" 2
 # 1 "level1CM.h" 1
 # 21 "level1CM.h"
@@ -120,9 +122,11 @@ typedef struct {
 } SPRITE;
 # 5 "utils.c" 2
 
-const unsigned short* currentCollisionMap = level1CMBitmap;
-static int collisionMapWidth = 256;
-static int collisionMapHeight = 256;
+static u8 collisionMapRuntime[(512) * (512)];
+
+const unsigned short* currentCollisionMap = (const unsigned short*)collisionMapRuntime;
+static int collisionMapWidth = (512);
+static int collisionMapHeight = (512);
 
 void setScreenblockPalette(int screenblock, int palRow) {
     for (int i = 0; i < 1024; i++) {
@@ -140,14 +144,16 @@ int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int h
     return (screenX <= -width || screenX >= 240 || screenY <= -height || screenY >= 160);
 }
 
-void setCollisionMap(const unsigned short* bitmap, int width, int height) {
-    if (width <= 0 || height <= 0) {
+void setMapTile(int baseScreenblock, int tileX, int tileY, u16 tileId) {
+    if (tileX < 0 || tileX >= ((512) / 8) || tileY < 0 || tileY >= ((512) / 8)) {
         return;
     }
+    int screenblock = baseScreenblock + (tileY / 32) * 2 + (tileX / 32);
+    int localX = tileX % 32;
+    int localY = tileY % 32;
 
-    currentCollisionMap = bitmap;
-    collisionMapWidth = width;
-    collisionMapHeight = height;
+    u16 *entry = &((SB*) 0x6000000)[screenblock].tilemap[((localY) * (32) + (localX))];
+    *entry = (*entry & ~0x03FF) | (tileId & 1023);
 }
 
 u8 colorAt(int x, int y) {

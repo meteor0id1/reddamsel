@@ -82,45 +82,44 @@ playChannel1:
 	@ Function supports interworking.
 	@ args = 16, pretend = 0, frame = 0
 	@ frame_needed = 0, uses_anonymous_args = 0
-	push	{r4, r5, r6, lr}
-	mov	r5, r2
-	mov	r6, r0
-	ldrb	r0, [sp, #24]	@ zero_extendqisi2
-	ldr	r2, .L12
-	cmp	r0, #0
+	push	{r4, r5, lr}
+	ldrb	r4, [sp, #12]	@ zero_extendqisi2
+	ldrb	lr, [sp, #20]	@ zero_extendqisi2
+	subs	r4, r4, #0
+	mov	r5, r0
+	ldr	r0, .L12
+	movne	r4, #1
+	cmp	lr, #0
 	ldr	ip, .L12+4
-	lsl	r0, r3, #4
-	movne	ip, r2
-	ldrb	r4, [sp, #16]	@ zero_extendqisi2
-	and	r0, r0, #112
-	and	r3, r5, #7
-	orr	r3, r3, r0
-	mov	r2, #67108864
-	cmp	r4, #0
-	moveq	r0, r3
-	orrne	r0, r3, #1
-	ldrb	lr, [sp, #28]	@ zero_extendqisi2
-	ldrb	r3, [sp, #20]	@ zero_extendqisi2
-	lsl	lr, lr, #6
-	and	lr, lr, #255
+	movne	ip, r0
+	mov	lr, #67108864
+	lsl	r3, r3, #4
+	ldrb	r0, [sp, #24]	@ zero_extendqisi2
+	and	r3, r3, #112
+	and	r2, r2, #7
+	orr	r2, r2, r3
+	ldrb	r3, [sp, #16]	@ zero_extendqisi2
+	lsl	r0, r0, #6
+	and	r0, r0, #255
 	and	r1, r1, #63
 	lsl	r3, r3, #8
-	orr	r1, r1, lr
+	orr	r1, r1, r0
 	and	r3, r3, #1792
 	orr	r1, r1, r3
-	orr	ip, ip, r1
-	lsl	ip, ip, #16
-	orr	lr, r6, #49152
-	lsr	ip, ip, #16
-	strh	ip, [r2, #98]	@ movhi
-	strh	lr, [r2, #100]	@ movhi
-	strh	r0, [r2, #96]	@ movhi
-	pop	{r4, r5, r6, lr}
+	orr	r3, ip, r1
+	lsl	r3, r3, #16
+	orr	r2, r2, r4, lsl #3
+	orr	r0, r5, #49152
+	lsr	r3, r3, #16
+	strh	r3, [lr, #98]	@ movhi
+	strh	r0, [lr, #100]	@ movhi
+	strh	r2, [lr, #96]	@ movhi
+	pop	{r4, r5, lr}
 	bx	lr
 .L13:
 	.align	2
 .L12:
-	.word	-4095
+	.word	-2048
 	.word	-4096
 	.size	playChannel1, .-playChannel1
 	.align	2
@@ -163,8 +162,8 @@ playAnalogSound:
 	@ args = 0, pretend = 0, frame = 0
 	@ frame_needed = 0, uses_anonymous_args = 0
 	@ link register save eliminated.
-	ldr	r3, .L38
-	cmp	r0, #17
+	ldr	r3, .L28
+	cmp	r0, #7
 	bhi	.L16
 	ldrb	r0, [r3, r0]
 	add	pc, pc, r0, lsl #2
@@ -172,19 +171,9 @@ playAnalogSound:
 	nop
 	.section	.rodata
 .L19:
-	.byte	(.L36-.Lrtx19-4)/4
-	.byte	(.L35-.Lrtx19-4)/4
-	.byte	(.L34-.Lrtx19-4)/4
-	.byte	(.L33-.Lrtx19-4)/4
-	.byte	(.L32-.Lrtx19-4)/4
-	.byte	(.L31-.Lrtx19-4)/4
-	.byte	(.L30-.Lrtx19-4)/4
-	.byte	(.L29-.Lrtx19-4)/4
-	.byte	(.L28-.Lrtx19-4)/4
-	.byte	(.L27-.Lrtx19-4)/4
 	.byte	(.L26-.Lrtx19-4)/4
 	.byte	(.L25-.Lrtx19-4)/4
-	.byte	(.L24-.Lrtx19-4)/4
+	.byte	(.L23-.Lrtx19-4)/4
 	.byte	(.L23-.Lrtx19-4)/4
 	.byte	(.L22-.Lrtx19-4)/4
 	.byte	(.L21-.Lrtx19-4)/4
@@ -194,178 +183,76 @@ playAnalogSound:
 	.p2align 2
 .L18:
 	mov	r3, #67108864
-	mov	r2, #117
-	ldr	r0, .L38+4
-	ldr	r1, .L38+8
+	mov	r2, #27
+	ldr	r0, .L28+4
+	ldr	r1, .L28+8
 	strh	r0, [r3, #98]	@ movhi
 	strh	r1, [r3, #100]	@ movhi
 	strh	r2, [r3, #96]	@ movhi
 .L16:
 	bx	lr
-.L36:
-	mov	r3, #67108864
-	mov	r2, #49152
-	ldr	r1, .L38+12
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L35:
-	mov	r3, #67108864
-	ldr	r1, .L38+16
-	ldr	r2, .L38+20
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L34:
-	mov	r3, #67108864
-	ldr	r1, .L38+24
-	ldr	r2, .L38+28
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L33:
-	mov	r3, #67108864
-	ldr	r1, .L38+24
-	ldr	r2, .L38+32
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L32:
-	mov	r3, #67108864
-	mov	r1, #61696
-	ldr	r2, .L38+36
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L31:
-	mov	r3, #67108864
-	ldr	r1, .L38+40
-	ldr	r2, .L38+44
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L30:
-	mov	r3, #67108864
-	ldr	r1, .L38+48
-	ldr	r2, .L38+52
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L29:
-	mov	r3, #67108864
-	ldr	r1, .L38+56
-	ldr	r2, .L38+60
-	strh	r1, [r3, #120]	@ movhi
-	strh	r2, [r3, #124]	@ movhi
-	bx	lr
-.L28:
-	mov	r3, #67108864
-	mov	r0, #61696
-	mov	r2, #55
-	ldr	r1, .L38+64
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
-	bx	lr
-.L27:
-	mov	r3, #67108864
-	mov	r0, #61696
-	mov	r2, #53
-	ldr	r1, .L38+8
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
-	bx	lr
-.L26:
-	mov	r3, #67108864
-	mov	r2, #53
-	ldr	r0, .L38+68
-	ldr	r1, .L38+72
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
-	bx	lr
-.L25:
-	mov	r3, #67108864
-	mov	r2, #23
-	ldr	r0, .L38+76
-	ldr	r1, .L38+64
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
-	bx	lr
-.L24:
-	mov	r3, #67108864
-	mov	r2, #23
-	ldr	r0, .L38+80
-	ldr	r1, .L38+84
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
-	bx	lr
 .L23:
 	mov	r3, #67108864
-	mov	r2, #39
-	ldr	r0, .L38+80
-	ldr	r1, .L38+64
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
+	ldr	r1, .L28+12
+	ldr	r2, .L28+16
+	strh	r1, [r3, #120]	@ movhi
+	strh	r2, [r3, #124]	@ movhi
 	bx	lr
 .L22:
 	mov	r3, #67108864
-	mov	r2, #36
-	ldr	r0, .L38+88
-	ldr	r1, .L38+84
-	strh	r0, [r3, #98]	@ movhi
-	strh	r1, [r3, #100]	@ movhi
-	strh	r2, [r3, #96]	@ movhi
+	ldr	r1, .L28+20
+	ldr	r2, .L28+24
+	strh	r1, [r3, #120]	@ movhi
+	strh	r2, [r3, #124]	@ movhi
 	bx	lr
 .L21:
 	mov	r3, #67108864
-	mov	r2, #36
-	ldr	r0, .L38+92
-	ldr	r1, .L38+96
+	mov	r2, #18
+	ldr	r0, .L28+4
+	ldr	r1, .L28+28
 	strh	r0, [r3, #98]	@ movhi
 	strh	r1, [r3, #100]	@ movhi
 	strh	r2, [r3, #96]	@ movhi
 	bx	lr
 .L20:
 	mov	r3, #67108864
-	mov	r2, #117
-	ldr	r0, .L38+88
-	ldr	r1, .L38+64
+	mov	r2, #1
+	ldr	r0, .L28+32
+	ldr	r1, .L28+8
 	strh	r0, [r3, #98]	@ movhi
 	strh	r1, [r3, #100]	@ movhi
 	strh	r2, [r3, #96]	@ movhi
 	bx	lr
-.L39:
+.L26:
+	mov	r3, #67108864
+	mov	r2, #49152
+	ldr	r1, .L28+36
+	strh	r1, [r3, #120]	@ movhi
+	strh	r2, [r3, #124]	@ movhi
+	bx	lr
+.L25:
+	mov	r3, #67108864
+	mov	r2, #28
+	ldr	r0, .L28+40
+	ldr	r1, .L28+44
+	strh	r0, [r3, #98]	@ movhi
+	strh	r1, [r3, #100]	@ movhi
+	strh	r2, [r3, #96]	@ movhi
+	bx	lr
+.L29:
 	.align	2
-.L38:
+.L28:
 	.word	.L19
-	.word	-2879
-	.word	-14634
-	.word	-3820
-	.word	-3552
-	.word	-16327
-	.word	-2786
-	.word	-16272
-	.word	-16264
+	.word	-3944
+	.word	-14586
+	.word	-3832
 	.word	-16232
-	.word	-3810
-	.word	-16325
-	.word	-4064
-	.word	-16353
-	.word	-3296
-	.word	-16240
+	.word	-3302
+	.word	-16272
 	.word	-14670
-	.word	-3712
-	.word	-14782
-	.word	-3445
-	.word	-2943
-	.word	-14734
-	.word	-3455
-	.word	-3451
-	.word	-14757
+	.word	-3940
+	.word	-3579
+	.word	-3434
+	.word	-14601
 	.size	playAnalogSound, .-playAnalogSound
 	.ident	"GCC: (devkitARM) 15.2.0"

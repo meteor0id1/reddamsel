@@ -87,16 +87,18 @@ typedef struct noteWithDuration {
   unsigned char duration;
 } NoteWithDuration;
 
+typedef enum {DASH, SWING, OUCH, KILL, BUSH, POWERUP, VICTORY, DEATH} SOUND_FX;
+
 void initSound();
 void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime);
 void playNoteWithDuration(NoteWithDuration *n, unsigned char duty);
 void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty);
-void playAnalogSound(unsigned short sound);
+void playAnalogSound(SOUND_FX sound);
 # 2 "analogSound.c" 2
 
 
-
-void initSound(){
+void initSound()
+{
 
   *(volatile unsigned short*)0x04000084 = (1<<7);
 
@@ -115,84 +117,58 @@ void initSound(){
   *(volatile unsigned short*)0x04000082 = ((2) % 3);
 }
 
-void playNoteWithDuration(NoteWithDuration *n, unsigned char duty){
-  if (n->note != REST) {
-    *(volatile unsigned short*)0x04000068 = (((15) & 15) << 12) | (((duty) & 3) << 6) | (64 - n->duration*256/1000);
+void playNoteWithDuration(NoteWithDuration *n, unsigned char duty)
+{
+  if (n->note != REST)
+  {
+    *(volatile unsigned short*)0x04000068 = (((15) & 15) << 12) | (((duty) & 3) << 6) | (64 - n->duration * 256 / 1000);
     *(volatile unsigned short*)0x0400006C = n->note | (1<<15) | (1<<14);
-  } else {
+  }
+  else
+  {
     *(volatile unsigned short*)0x04000068 = 0;
     *(volatile unsigned short*)0x0400006C = 0;
   }
 }
 
-void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty){
-  *(volatile unsigned short*)0x04000062 = (((15) & 15) << 12) | (envDir && (1 << 11)) | (((envStepTime) & 7) << 8) | (((duty) & 3) << 6) | ((length) & 63);
+void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty)
+{
+  *(volatile unsigned short*)0x04000062 = (((15) & 15) << 12) | (envDir ? (1 << 11) : (0 << 11)) | (((envStepTime) & 7) << 8) | (((duty) & 3) << 6) | ((length) & 63);
   *(volatile unsigned short*)0x04000064 = note | (1<<15) | (1<<14);
-  *(volatile unsigned short*)0x04000060 = ((sweepShift) & 7) | (((sweepTime) & 7) << 4) | (sweepDir && (1 << 3));
+  *(volatile unsigned short*)0x04000060 = ((sweepShift) & 7) | (((sweepTime) & 7) << 4) | (sweepDir ? (1 << 3) : 0);
 }
 
-void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime){
+void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime)
+{
   *(volatile unsigned short*)0x04000078 = (((15) & 15) << 12) | (((steptime) & 7) << 8) | ((length) & 63);
   *(volatile unsigned short*)0x0400007C = (1<<15) | (1<<14) | (((s) & 15) << 4) | (((b) ? 1 : 0) << 3) | (((r) & 7));
 }
 
-void playAnalogSound(unsigned short sound){
-  switch (sound){
-    case 0:
-      playDrumSound(0, 0, 0, 20, 1);
+void playAnalogSound(SOUND_FX sound) {
+  switch (sound) {
+    case DASH:
+      playDrumSound(0, 0, 0, 5, 2);
       break;
-    case 1:
-      playDrumSound(1, 3, 1, 32, 2);
+    case SWING:
+      playChannel1(NOTE_B4, 22, 4, 1, 1, 2, 0, 2);
       break;
-    case 2:
-      playDrumSound(0, 7, 0, 30, 5);
+    case OUCH:
+      playDrumSound(0, 9, 1, 8, 1);
       break;
-    case 3:
-      playDrumSound(0, 7, 1, 30, 5);
+    case KILL:
+      playDrumSound(0, 9, 1, 8, 1);
       break;
-    case 4:
-      playDrumSound(0, 9, 1, 0, 1);
+    case BUSH:
+      playDrumSound(0, 7, 0, 26, 3);
       break;
-    case 5:
-      playDrumSound(3, 3, 1, 30, 1);
+    case POWERUP:
+      playChannel1(NOTE_G4, 24, 2, 1, 0, 0, 0, 2);
       break;
-    case 6:
-      playDrumSound(7, 1, 1, 32, 0);
+    case VICTORY:
+      playChannel1(NOTE_C5, 28, 1, 0, 0, 0, 0, 2);
       break;
-    case 7:
-      playDrumSound(0, 9, 0, 32, 3);
-      break;
-    case 8:
-      playChannel1(NOTE_G4, 0, 7, 3, 0, 1, 0, 0);
-      break;
-    case 9:
-      playChannel1(NOTE_A4, 0, 4, 3, 1, 1, 0, 0);
-      break;
-    case 10:
-      playChannel1(NOTE_D4, 0, 4, 3, 1, 1, 0, 2);
-      break;
-    case 11:
-      playChannel1(NOTE_G4, 10, 7, 1, 1, 2, 1, 2);
-      break;
-    case 12:
-      playChannel1(NOTE_E4, 0, 7, 1, 1, 4, 1, 2);
-      break;
-    case 13:
-      playChannel1(NOTE_G4, 0, 7, 2, 1, 4, 1, 2);
-      break;
-    case 14:
-      playChannel1(NOTE_E4, 1, 4, 2, 0, 2, 0, 2);
-      break;
-    case 15:
-      playChannel1(NOTE_DS4, 5, 4, 2, 0, 2, 0, 2);
-      break;
-    case 16:
-      playChannel1(NOTE_G4, 0, 4, 7, 1, 2, 1, 2);
-      break;
-    case 17:
-      playChannel1(NOTE_A4, 0, 5, 7, 1, 4, 1, 3);
-      break;
-    default:
+    case DEATH:
+      playChannel1(NOTE_C5, 24, 3, 1, 1, 0, 0, 2);
       break;
   }
 }

@@ -337,10 +337,12 @@ typedef struct noteWithDuration {
   unsigned char duration;  // in ms, 0-250
 } NoteWithDuration;
 
+typedef enum {DASH, SWING, OUCH, KILL, BUSH, POWERUP, VICTORY, DEATH} SOUND_FX;
+
 void initSound();
 void playDrumSound(unsigned char r, unsigned char s, unsigned char b, unsigned char length, unsigned char steptime);
 void playNoteWithDuration(NoteWithDuration *n, unsigned char duty);
 void playChannel1(unsigned short note, unsigned char length, unsigned char sweepShift, unsigned char sweepTime, unsigned char sweepDir, unsigned char envStepTime, unsigned char envDir, unsigned char duty);
-void playAnalogSound(unsigned short sound);
+void playAnalogSound(SOUND_FX sound);
 
 # endif

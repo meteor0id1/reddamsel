@@ -7,6 +7,9 @@
 void setScreenblockPalette(int screenblock, int palRow);
 int clipSpritesOffScreen(u8 oamIndex, int screenX, int screenY, int width, int height);
 void clearBackground(int screenblock, u16 tileEntry);
+
+void setMapTile(int screenblock, int x, int y, u16 tileId);
+
 u8 colorAt(int x, int y);
 u8 mapCollide(int x, int y, u32 colorMask);
 u8 hitboxCollide(int x1, int y1, int hbW1, int hbH1, int x2, int y2, int hbW2, int hbH2);
