@@ -3,7 +3,7 @@
         "height": 4300,
         "width": 2
     },
-    "activeFile": "",
+    "activeFile": "instructionsScreen.tmx",
     "expandedProjectPaths": [
     ],
     "file.lastUsedOpenFilter": "All Files (*)",
@@ -24,7 +24,7 @@
         },
         "instructionsScreen.tmx": {
             "scale": 2.77,
-            "selectedLayer": 3,
+            "selectedLayer": 2,
             "viewCenter": {
                 "x": 140.4332129963899,
                 "y": 134.4765342960289
