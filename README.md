@@ -4,6 +4,8 @@
 CS 2261 Final Project
 Meredith Clopper
 
+Game Link: [https://meteor0id1.github.io/reddamselgame/]
+
 ### Overview ###
 *You are a Red Damsel, slayer of monsters. Your sister has been taken. Venture through the forest, find her, and get revenge.*
 
